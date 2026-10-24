@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">AccessCard</string>
+    <string name="app_description">Your access cards, together.</string>
+    <string name="empty_title">A little less to carry.</string>
+    <string name="empty_message">Keep your access cards here. Card identity emulation depends on your device’s NFC capabilities.</string>
+    <color name="launcher_background">#132E35</color>
+</resources>

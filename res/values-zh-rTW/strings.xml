@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_description">將你的門禁卡，放在一起。</string>
+    <string name="empty_title">少帶一張，多一點自在。</string>
+    <string name="empty_message">在這裡管理門禁卡。卡片識別參數模擬取決於裝置的 NFC 能力。</string>
+</resources>

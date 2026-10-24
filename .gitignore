@@ -1,0 +1,17 @@
+AGENTS.md
+AGENTS.override.md
+CLAUDE.md
+CLAUDE.local.md
+GEMINI.md
+.codex/
+.claude/
+.idea/
+.gradle/
+local.properties
+*.iml
+*.jks
+*.keystore
+*.apk
+*.aab
+/build/
+/out/
