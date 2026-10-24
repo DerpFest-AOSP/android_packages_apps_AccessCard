@@ -30,6 +30,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.*
@@ -41,7 +42,6 @@ import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.filter
-import org.derpfest.accesscard.R
 import org.derpfest.accesscard.WalletState
 import org.derpfest.accesscard.model.*
 import org.derpfest.accesscard.nfc.*
@@ -216,8 +216,9 @@ fun HardwareStatus(
             AccessMode.NFC_OFF -> R.string.mode_nfc_off_detail
             AccessMode.UNSUPPORTED -> R.string.mode_unsupported_detail
             AccessMode.ERROR ->
-                if (state.hardware.needsRecovery) R.string.mode_recovery
-                else R.string.mode_error_detail
+                state.hardware.failure?.messageRes
+                    ?: if (state.hardware.needsRecovery) R.string.mode_recovery
+                    else R.string.mode_error_detail
             else -> R.string.mode_idle_detail
         }
     Surface(
@@ -425,6 +426,15 @@ fun WalletScreen(
                 onRefresh,
                 Modifier.padding(horizontal = 24.dp),
             )
+            if (state.hardware.needsRecovery) {
+                TextButton(
+                    onStop,
+                    Modifier.align(Alignment.CenterHorizontally),
+                    enabled = !state.busy,
+                ) {
+                    Text(stringResource(R.string.retry_recovery))
+                }
+            }
             if (
                 state.hardware.mode == AccessMode.ACTIVE &&
                     state.hardware.identity != selected?.identity
@@ -445,7 +455,7 @@ fun WalletScreen(
                 ) {
                     Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
                         Text(
-                            stringResource(message),
+                            stringResource(message.messageRes),
                             Modifier.weight(1f),
                             style = MaterialTheme.typography.bodyMedium,
                         )
@@ -559,7 +569,7 @@ private fun CardCarousel(
         contentPadding = PaddingValues(horizontal = 24.dp),
         pageSpacing = 14.dp,
         key = { cards[it].id },
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier.fillMaxWidth().testTag("card_carousel"),
     ) { index ->
         val card = cards[index]
         CardFace(

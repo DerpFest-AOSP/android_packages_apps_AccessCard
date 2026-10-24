@@ -9,52 +9,6 @@ import android.os.Bundle
 import org.derpfest.accesscard.R
 import org.derpfest.accesscard.model.CardIdentity
 
-enum class AccessMode {
-    UNSUPPORTED,
-    NFC_OFF,
-    IDLE,
-    READING,
-    APPLYING,
-    ACTIVE,
-    STOPPING,
-    ERROR,
-}
-
-enum class Qualification {
-    UNKNOWN,
-    EXPERIMENTAL,
-    VERIFIED,
-}
-
-data class BackendCapabilities(
-    val canReadIdentity: Boolean,
-    val canApplyIdentity: Boolean,
-    val canRestore: Boolean,
-    val qualification: Qualification,
-    val allowedUidLengths: Set<Int>,
-    val verifiedUidLengths: Set<Int>,
-)
-
-data class HardwareState(
-    val mode: AccessMode,
-    val identity: CardIdentity? = null,
-    val ownerUid: Int = -1,
-    val generation: Long = 0,
-    val needsRecovery: Boolean = false,
-)
-
-interface AccessCardBackend {
-    val capabilities: BackendCapabilities
-
-    fun inspect(): HardwareState
-
-    fun apply(identity: CardIdentity): Boolean
-
-    fun stop(): Boolean
-
-    fun canApply(identity: CardIdentity): Boolean
-}
-
 /** One shared AOSP backend; SoC and product names never select a code path. */
 class AospAccessCardBackend(context: Context) : AccessCardBackend {
     private val app = context.applicationContext
@@ -95,16 +49,28 @@ class AospAccessCardBackend(context: Context) : AccessCardBackend {
         val getter = stateGetter ?: return HardwareState(AccessMode.UNSUPPORTED)
         // The versioned read-only extension also permits safe degradation on older NFC modules.
         val state =
-            getter.invoke(nfc.nfcOemExtension) as? Bundle ?: return HardwareState(AccessMode.ERROR)
+            try {
+                getter.invoke(nfc.nfcOemExtension) as? Bundle
+                    ?: throw AccessException(AccessFailure.SERVICE_UNAVAILABLE)
+            } catch (e: Exception) {
+                return HardwareState(AccessMode.ERROR, failure = AccessFailure.SERVICE_UNAVAILABLE)
+            }
+        val failure = AccessFailure.fromController(state.getString("failure_reason"))
         if (state.getInt("version") != 1) return HardwareState(AccessMode.UNSUPPORTED)
         if (state.getBoolean("transitioning")) return HardwareState(AccessMode.STOPPING)
         if (state.getBoolean("recovery_required")) {
-            return HardwareState(AccessMode.ERROR, needsRecovery = true)
+            return HardwareState(
+                AccessMode.ERROR,
+                needsRecovery = true,
+                failure = failure ?: AccessFailure.RECOVERY_REQUIRED,
+            )
         }
+        if (state.getBoolean("reading")) return HardwareState(AccessMode.READING, failure = failure)
         if (!state.getBoolean("active")) {
             return HardwareState(
                 if (capabilities.canApplyIdentity) AccessMode.IDLE else AccessMode.UNSUPPORTED,
                 generation = state.getLong("generation"),
+                failure = failure,
             )
         }
         val uid = requireNotNull(state.getByteArray("uid"))
@@ -134,15 +100,19 @@ class AospAccessCardBackend(context: Context) : AccessCardBackend {
         val atqa = identity.atqa
         // Match the stock parameter byte order. RATS is untouched for non-ISO-DEP identities.
         val result =
-            nfc.nfcOemExtension.emulateNfcTechnologyATag(
-                true,
-                atqa[1],
-                atqa[0],
-                identity.sak.toByte(),
-                identity.uid,
-                0,
-                null,
-            )
+            try {
+                nfc.nfcOemExtension.emulateNfcTechnologyATag(
+                    true,
+                    atqa[1],
+                    atqa[0],
+                    identity.sak.toByte(),
+                    identity.uid,
+                    0,
+                    null,
+                )
+            } catch (e: Exception) {
+                throw AccessException(AccessFailure.SERVICE_UNAVAILABLE)
+            }
         return result == NfcOemExtension.EMULATE_NFC_A_TAG_STATUS_OK &&
             inspect().let { it.mode == AccessMode.ACTIVE && it.identity == identity }
     }
@@ -151,7 +121,11 @@ class AospAccessCardBackend(context: Context) : AccessCardBackend {
         val nfc = adapter ?: return false
         if (!nfc.isEnabled || !capabilities.canRestore) return false
         val result =
-            nfc.nfcOemExtension.emulateNfcTechnologyATag(false, 0, 0, 0, byteArrayOf(), 0, null)
+            try {
+                nfc.nfcOemExtension.emulateNfcTechnologyATag(false, 0, 0, 0, byteArrayOf(), 0, null)
+            } catch (e: Exception) {
+                throw AccessException(AccessFailure.SERVICE_UNAVAILABLE)
+            }
         val after = inspect()
         return result == NfcOemExtension.EMULATE_NFC_A_TAG_STATUS_OK &&
             after.mode != AccessMode.ACTIVE &&

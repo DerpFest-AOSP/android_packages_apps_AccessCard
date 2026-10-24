@@ -1,0 +1,7 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="org.derpfest.accesscard.uitests">
+    <application android:theme="@android:style/Theme.Material.Light.NoActionBar"
+        android:label="AccessCard UI tests" android:supportsRtl="true" />
+    <instrumentation android:name="androidx.test.runner.AndroidJUnitRunner"
+        android:targetPackage="org.derpfest.accesscard.uitests" />
+</manifest>

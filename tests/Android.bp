@@ -4,3 +4,30 @@ java_test_host {
     static_libs: ["junit"],
     test_suites: ["general-tests"],
 }
+
+java_test_host {
+    name: "AccessCardCoordinatorTests",
+    srcs: ["host/**/*.kt", ":accesscard-core-sources", ":accesscard-domain-sources"],
+    static_libs: ["junit", "kotlinx_coroutines", "kotlinx_coroutines_test"],
+    test_suites: ["general-tests"],
+}
+
+android_test {
+    name: "AccessCardUiTests",
+    defaults: ["accesscard-compose-defaults"],
+    srcs: ["ui/**/*.kt"],
+    manifest: "AndroidManifest.xml",
+    resource_dirs: [],
+    platform_apis: true,
+    certificate: "platform",
+    static_libs: [
+        "AccessCardUi",
+        "androidx.compose.ui_ui-test-junit4",
+        "androidx.compose.ui_ui-test-manifest",
+        "androidx.test.core",
+        "androidx.test.rules",
+        "androidx.test.ext.junit",
+        "androidx.test.runner",
+    ],
+    test_suites: ["device-tests"],
+}

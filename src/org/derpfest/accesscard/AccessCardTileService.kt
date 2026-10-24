@@ -37,6 +37,8 @@ class AccessCardTileService : TileService() {
                             AccessMode.ACTIVE ->
                                 wallet.activeCard?.name ?: getString(R.string.active_badge)
                             AccessMode.NFC_OFF -> getString(R.string.mode_nfc_off)
+                            AccessMode.READING -> getString(R.string.mode_reading)
+                            AccessMode.UNSUPPORTED -> getString(R.string.mode_unsupported)
                             AccessMode.APPLYING -> getString(R.string.mode_applying)
                             AccessMode.STOPPING -> getString(R.string.mode_stopping)
                             AccessMode.ERROR -> getString(R.string.mode_error)

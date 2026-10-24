@@ -15,18 +15,14 @@ filegroup {
     srcs: ["src/**/model/*.java", "src/**/data/*.java"],
 }
 
-android_app {
-    name: "AccessCard",
-    srcs: ["src/**/*.kt", "src/**/*.java"],
-    resource_dirs: ["res"],
-    manifest: "AndroidManifest.xml",
-    platform_apis: true,
-    certificate: "platform",
-    system_ext_specific: true,
-    privileged: true,
-    privapp_allowlist: "privapp-permissions-org.derpfest.accesscard.xml",
+filegroup {
+    name: "accesscard-domain-sources",
+    srcs: ["src/**/domain/*.kt", "src/**/nfc/AccessCardContract.kt"],
+}
+
+java_defaults {
+    name: "accesscard-compose-defaults",
     kotlincflags: ["-Xjvm-default=all"],
-    optimize: { enabled: false },
     static_libs: [
         "androidx.activity_activity-compose",
         "androidx.compose.animation_animation",
@@ -41,4 +37,40 @@ android_app {
         "androidx.lifecycle_lifecycle-runtime-ktx",
         "kotlinx_coroutines",
     ],
+}
+
+// The production wallet components are also used by the standalone UI test APK.
+android_library {
+    name: "AccessCardUi",
+    defaults: ["accesscard-compose-defaults"],
+    srcs: [
+        "src/**/ui/*.kt",
+        "src/**/model/*.java",
+        "src/**/domain/WalletState.kt",
+        "src/**/nfc/AccessCardContract.kt",
+    ],
+    manifest: "AndroidManifest-ui.xml",
+    resource_dirs: ["res"],
+    platform_apis: true,
+}
+
+android_app {
+    name: "AccessCard",
+    defaults: ["accesscard-compose-defaults"],
+    srcs: ["src/**/*.kt", "src/**/*.java"],
+    exclude_srcs: [
+        "src/**/ui/*.kt",
+        "src/**/model/*.java",
+        "src/**/domain/WalletState.kt",
+        "src/**/nfc/AccessCardContract.kt",
+    ],
+    resource_dirs: [],
+    manifest: "AndroidManifest.xml",
+    platform_apis: true,
+    certificate: "platform",
+    system_ext_specific: true,
+    privileged: true,
+    privapp_allowlist: "privapp-permissions-org.derpfest.accesscard.xml",
+    optimize: { enabled: false },
+    static_libs: ["AccessCardUi"],
 }

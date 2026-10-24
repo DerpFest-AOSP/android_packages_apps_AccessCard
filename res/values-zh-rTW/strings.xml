@@ -89,4 +89,13 @@
     <string name="reader_reading">正在讀取卡片…</string>
     <string name="reader_saved">卡片已儲存。</string>
     <string name="error_tag_lost">卡片太早移開了，請靠近並保持不動，再試一次。</string>
+    <string name="error_busy">NFC 正在使用中。請完成讀卡或等待目前操作結束，再試一次。</string>
+    <string name="error_service">無法連線至 NFC 服務。請重新開啟 NFC 後再試一次。</string>
+    <string name="error_snapshot">無法讀取原始 NFC 設定，因此未啟用新卡片。</string>
+    <string name="error_rejected">NFC 控制器拒絕這組設定，卡片未啟用。</string>
+    <string name="error_readback">寫入後的 NFC 設定不符。請確認目前啟用的卡片後再試一次。</string>
+    <string name="error_timeout">NFC 控制器回應逾時。請關閉再開啟 NFC 後重試。</string>
+    <string name="error_journal">無法存取 NFC 復原資料。NFC 已暫停，請收集診斷資訊後再重試。</string>
+    <string name="error_discovery">無法重新啟動 NFC 感應。請關閉再開啟 NFC 以復原。</string>
+    <string name="retry_recovery">重試 NFC 復原</string>
 </resources>

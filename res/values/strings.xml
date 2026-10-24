@@ -90,4 +90,13 @@
     <string name="reader_reading">Reading your card…</string>
     <string name="reader_saved">Card saved.</string>
     <string name="error_tag_lost">The card moved away too soon. Hold it close and try again.</string>
+    <string name="error_busy">NFC is busy. Finish reading or wait for the current operation, then try again.</string>
+    <string name="error_service">The NFC service is unavailable. Reopen NFC and try again.</string>
+    <string name="error_snapshot">The original NFC settings could not be read. No new card was activated.</string>
+    <string name="error_rejected">The NFC controller rejected these settings. The card was not activated.</string>
+    <string name="error_readback">NFC settings did not match after writing. Check the active card before retrying.</string>
+    <string name="error_timeout">The NFC controller did not respond in time. Turn NFC off and on before retrying.</string>
+    <string name="error_journal">NFC recovery data is unavailable. NFC remains paused. Collect diagnostics before retrying.</string>
+    <string name="error_discovery">NFC listening could not restart. Turn NFC off and on to restore normal operation.</string>
+    <string name="retry_recovery">Retry NFC recovery</string>
 </resources>
