@@ -8,11 +8,13 @@ import java.io.*;
 import java.nio.file.*;
 import java.util.*;
 import java.util.zip.CRC32;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 
 /** Versioned, bounded wallet storage. A failed write never replaces the previous wallet. */
 public final class CardStore {
     private static final int MAGIC = 0x41434344;
-    private static final int VERSION = 1;
+    private static final int VERSION = 2;
     private static final int MAX_BYTES = 256 * 1024;
     public interface Storage {
         byte[] read() throws IOException;
@@ -54,17 +56,27 @@ public final class CardStore {
         if (bytes == null) return WalletSnapshot.empty();
         if (bytes.length < 20 || bytes.length > MAX_BYTES) throw new IOException("Invalid wallet");
         try {
-            CRC32 crc = new CRC32();
-            crc.update(bytes, 0, bytes.length - 8);
-            DataInputStream trailer = new DataInputStream(
-                    new ByteArrayInputStream(bytes, bytes.length - 8, 8));
-            if (crc.getValue() != trailer.readLong()) throw new IOException("Wallet checksum mismatch");
+            DataInputStream header = new DataInputStream(new ByteArrayInputStream(bytes));
+            if (header.readInt() != MAGIC) throw new IOException("Unknown wallet format");
+            int version = header.readInt();
+            if (version != 1 && version != VERSION) {
+                throw new IOException("Unsupported wallet version: " + version);
+            }
+            int checksumLength = version == 1 ? 8 : 32;
+            if (bytes.length < 14 + checksumLength) throw new IOException("Truncated wallet");
+            int payloadLength = bytes.length - checksumLength;
+            if (version == 1) {
+                CRC32 crc = new CRC32();
+                crc.update(bytes, 0, payloadLength);
+                DataInputStream trailer = new DataInputStream(
+                        new ByteArrayInputStream(bytes, payloadLength, checksumLength));
+                if (crc.getValue() != trailer.readLong()) throw new IOException("Wallet checksum mismatch");
+            } else if (!MessageDigest.isEqual(sha256(Arrays.copyOf(bytes, payloadLength)),
+                    Arrays.copyOfRange(bytes, payloadLength, bytes.length))) {
+                throw new IOException("Wallet checksum mismatch");
+            }
             DataInputStream input = new DataInputStream(
-                    new ByteArrayInputStream(bytes, 0, bytes.length - 8));
-            if (input.readInt() != MAGIC) throw new IOException("Unknown wallet format");
-            int version = input.readInt();
-            // Future migrations must be explicit. Never reset or overwrite an unknown version.
-            if (version != VERSION) throw new IOException("Unsupported wallet version: " + version);
+                    new ByteArrayInputStream(bytes, 8, payloadLength - 8));
             String defaultId = input.readUTF();
             int count = input.readInt();
             if (count < 0 || count > 512) throw new IOException("Invalid card count");
@@ -85,7 +97,11 @@ public final class CardStore {
                 cards.add(new AccessCardProfile(id, name, identity, color, icon, created));
             }
             if (input.available() != 0) throw new IOException("Unexpected wallet data");
-            return new WalletSnapshot(cards, defaultId.isEmpty() ? null : defaultId);
+            WalletSnapshot wallet = new WalletSnapshot(cards, defaultId.isEmpty() ? null : defaultId);
+            // Validate the entire old record before atomically migrating it. Never rewrite
+            // corrupt data or unknown versions, and propagate migration write failures.
+            if (version == 1) save(wallet);
+            return wallet;
         } catch (IllegalArgumentException | NullPointerException e) {
             throw new IOException("Invalid wallet data", e);
         }
@@ -93,13 +109,26 @@ public final class CardStore {
 
     public synchronized AccessCardProfile add(String name, CardIdentity identity,
             int color, int icon) throws IOException {
+        return add(UUID.randomUUID().toString(), name, identity, color, icon);
+    }
+
+    /** A retained reader operation uses its UUID so retry after process death is idempotent. */
+    public synchronized AccessCardProfile add(String id, String name, CardIdentity identity,
+            int color, int icon) throws IOException {
+        UUID.fromString(id);
         WalletSnapshot current = load();
+        for (AccessCardProfile card : current.getCards()) {
+            if (card.getId().equals(id)) {
+                if (!card.getIdentity().equals(identity)) throw new IOException("Reused operation ID");
+                return card;
+            }
+        }
         for (AccessCardProfile card : current.getCards()) {
             if (card.getIdentity().getUidHex().equals(identity.getUidHex())) {
                 throw new DuplicateCardException();
             }
         }
-        AccessCardProfile card = new AccessCardProfile(UUID.randomUUID().toString(), name,
+        AccessCardProfile card = new AccessCardProfile(id, name,
                 identity, color, icon, System.currentTimeMillis());
         List<AccessCardProfile> cards = new ArrayList<>(current.getCards());
         cards.add(card);
@@ -147,6 +176,14 @@ public final class CardStore {
         throw new IOException("Unknown card");
     }
 
+    private static byte[] sha256(byte[] bytes) {
+        try {
+            return MessageDigest.getInstance("SHA-256").digest(bytes);
+        } catch (NoSuchAlgorithmException impossible) {
+            throw new AssertionError(impossible);
+        }
+    }
+
     private void save(WalletSnapshot wallet) throws IOException {
         ByteArrayOutputStream bytes = new ByteArrayOutputStream();
         DataOutputStream output = new DataOutputStream(bytes);
@@ -165,9 +202,8 @@ public final class CardStore {
             output.write(card.getIdentity().getAtqa());
             output.writeByte(card.getIdentity().getSak());
         }
-        CRC32 crc = new CRC32();
-        crc.update(bytes.toByteArray());
-        output.writeLong(crc.getValue());
+        output.flush();
+        output.write(sha256(bytes.toByteArray()));
         output.flush();
         if (bytes.size() > MAX_BYTES) throw new IOException("Wallet exceeds size limit");
         storage.write(bytes.toByteArray());

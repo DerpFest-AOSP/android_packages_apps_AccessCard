@@ -107,10 +107,10 @@ public class CardStoreTest {
     @Test
     public void futureVersionIsPreservedForExplicitMigration() throws Exception {
         store.add("Home", first, 0, 0);
-        ByteBuffer.wrap(storage.bytes).putInt(4, 2);
-        CRC32 crc = new CRC32();
-        crc.update(storage.bytes, 0, storage.bytes.length - 8);
-        ByteBuffer.wrap(storage.bytes).putLong(storage.bytes.length - 8, crc.getValue());
+        ByteBuffer.wrap(storage.bytes).putInt(4, 99);
+        byte[] digest = java.security.MessageDigest.getInstance("SHA-256")
+                .digest(Arrays.copyOf(storage.bytes, storage.bytes.length - 32));
+        System.arraycopy(digest, 0, storage.bytes, storage.bytes.length - 32, 32);
         byte[] future = storage.bytes.clone();
         assertThrows(IOException.class, () -> store.load());
         assertThrows(IOException.class, () -> store.add("Office", second, 0, 0));
@@ -210,6 +210,57 @@ public class CardStoreTest {
                 IOException.class, () -> new WalletActions(store, gateway).remove(card.getId()));
         assertNull(gateway.active);
         assertEquals(1, store.load().getCards().size());
+    }
+
+    private byte[] legacyWallet() throws Exception {
+        java.io.ByteArrayOutputStream bytes = new java.io.ByteArrayOutputStream();
+        java.io.DataOutputStream out = new java.io.DataOutputStream(bytes);
+        out.writeInt(0x41434344); out.writeInt(1);
+        String id = "00000000-0000-0000-0000-000000000001";
+        out.writeUTF(id); out.writeInt(1); out.writeUTF(id); out.writeUTF("Home");
+        out.writeByte(4); out.writeByte(2); out.writeLong(123);
+        out.writeByte(4); out.write(first.getUid()); out.write(first.getAtqa()); out.writeByte(first.getSak());
+        CRC32 crc = new CRC32(); crc.update(bytes.toByteArray()); out.writeLong(crc.getValue());
+        return bytes.toByteArray();
+    }
+
+    @Test public void migratesVersionOneWithoutChangingProfilesOrDefault() throws Exception {
+        storage.bytes = legacyWallet();
+        WalletSnapshot loaded = store.load();
+        assertEquals(2, ByteBuffer.wrap(storage.bytes).getInt(4));
+        assertEquals("Home", loaded.getCards().get(0).getName());
+        assertEquals(first, loaded.getCards().get(0).getIdentity());
+        assertEquals(loaded.getCards().get(0).getId(), loaded.getDefaultId());
+        assertEquals(4, loaded.getCards().get(0).getColor());
+        assertEquals(123, loaded.getCards().get(0).getCreatedAt());
+        assertEquals(first, new CardStore(storage).load().getCards().get(0).getIdentity());
+    }
+
+    @Test public void failedMigrationPreservesTheLegacyFileForRetry() throws Exception {
+        byte[] legacy = legacyWallet(); storage.bytes = legacy.clone(); storage.failWrite = true;
+        assertThrows(IOException.class, () -> store.load());
+        assertArrayEquals(legacy, storage.bytes);
+        storage.failWrite = false;
+        assertEquals(1, store.load().getCards().size());
+        assertEquals(2, ByteBuffer.wrap(storage.bytes).getInt(4));
+    }
+
+    @Test public void corruptLegacyDataIsNeverMigrated() throws Exception {
+        storage.bytes = legacyWallet(); storage.bytes[15] ^= 1;
+        byte[] before = storage.bytes.clone();
+        assertThrows(IOException.class, () -> store.load());
+        assertArrayEquals(before, storage.bytes);
+    }
+
+    @Test public void retriedReaderCommitReturnsExistingCardWithoutOverwritingEdits() throws Exception {
+        String operation = UUID.randomUUID().toString();
+        AccessCardProfile original = store.add(operation, "Home", first, 0, 0);
+        store.update(original.withAppearance("Renamed", 2, 3));
+        AccessCardProfile retried = store.add(operation, "Home", first, 0, 0);
+        assertEquals(original.getId(), retried.getId());
+        assertEquals("Renamed", retried.getName());
+        assertEquals(1, store.load().getCards().size());
+        assertThrows(IOException.class, () -> store.add(operation, "Another", second, 0, 0));
     }
 
     private static final class FakeGateway implements WalletActions.Gateway {
