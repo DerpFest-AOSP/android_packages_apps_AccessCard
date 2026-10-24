@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <overlayable name="AccessCardDeviceConfig">
+        <policy type="system|product|signature">
+            <item type="integer" name="config_accesscard_qualification" />
+            <item type="array" name="config_accesscard_allowed_uid_lengths" />
+            <item type="array" name="config_accesscard_verified_uid_lengths" />
+            <item type="string" name="reader_hint" />
+        </policy>
+    </overlayable>
+</resources>

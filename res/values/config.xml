@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 0: not qualified, 1: explicitly enabled for experiments, 2: RF-verified. -->
+    <integer name="config_accesscard_qualification">0</integer>
+    <!-- API-valid lengths are not a claim of verified controller support. -->
+    <integer-array name="config_accesscard_allowed_uid_lengths">
+        <item>4</item><item>7</item><item>10</item>
+    </integer-array>
+    <integer-array name="config_accesscard_verified_uid_lengths" />
+</resources>

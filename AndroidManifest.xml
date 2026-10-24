@@ -11,11 +11,28 @@
         android:label="@string/app_name"
         android:supportsRtl="true"
         android:theme="@style/Theme.AccessCard">
-        <activity android:name=".MainActivity" android:exported="true">
+        <activity android:name=".MainActivity" android:exported="true" android:launchMode="singleTop">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE_PREFERENCES" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
         </activity>
+        <activity android:name=".ReaderActivity" android:exported="false" />
+        <activity android:name=".QuickAccessActivity" android:exported="false"
+            android:excludeFromRecents="true" android:launchMode="singleTop"
+            android:taskAffinity="org.derpfest.accesscard.quick"
+            android:theme="@style/Theme.AccessCard.Quick" />
+        <service android:name=".AccessCardTileService" android:exported="true"
+            android:label="@string/app_name" android:icon="@drawable/ic_card"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+            <meta-data android:name="android.service.quicksettings.ACTIVE_TILE" android:value="true" />
+        </service>
     </application>
 </manifest>
