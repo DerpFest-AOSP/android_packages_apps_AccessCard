@@ -1,0 +1,6 @@
+java_test_host {
+    name: "AccessCardCoreTests",
+    srcs: ["src/**/*.java", ":accesscard-core-sources"],
+    static_libs: ["junit"],
+    test_suites: ["general-tests"],
+}

@@ -10,6 +10,11 @@ license {
     license_text: ["LICENSE"],
 }
 
+filegroup {
+    name: "accesscard-core-sources",
+    srcs: ["src/**/model/*.java", "src/**/data/*.java"],
+}
+
 android_app {
     name: "AccessCard",
     srcs: ["src/**/*.kt", "src/**/*.java"],
