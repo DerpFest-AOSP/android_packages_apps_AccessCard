@@ -48,7 +48,7 @@ class WalletUiTest {
     private var stops = 0
     private var moved: Pair<String, Int>? = null
 
-    private fun show(state: WalletState, quick: Boolean = false) {
+    private fun show(state: WalletState, quick: Boolean = false, session: State<Int>? = null) {
         compose.setContent {
             AccessCardTheme {
                 WalletScreen(
@@ -67,6 +67,7 @@ class WalletUiTest {
                     onRefresh = {},
                     onClearMessage = {},
                     quick = quick,
+                    selectionSession = session?.value ?: 0,
                 )
             }
         }
@@ -112,6 +113,30 @@ class WalletUiTest {
         assertEquals(1, stops)
         assertNull(activated)
         compose.onNodeWithText(text(R.string.page_indicator, 1, 2)).assertIsDisplayed()
+    }
+
+    @Test
+    fun reopeningPickerDiscardsLastBrowseAndReselectsActiveCard() {
+        val a = card(1)
+        val b = card(2)
+        val session = mutableIntStateOf(0)
+        show(
+            WalletState(
+                wallet = WalletSnapshot(listOf(a, b), b.id),
+                loading = false,
+                hardware = HardwareState(AccessMode.ACTIVE, a.identity),
+            ),
+            quick = true,
+            session = session,
+        )
+        compose.onNodeWithTag("card_carousel").performTouchInput { swipeLeft() }
+        compose.waitForIdle()
+        compose.onNodeWithText(text(R.string.use_card)).assertIsEnabled()
+        compose.runOnIdle { session.intValue++ }
+        compose.onNodeWithText(text(R.string.page_indicator, 1, 2)).assertIsDisplayed()
+        compose.onNodeWithText(text(R.string.stop_card)).assertIsEnabled()
+        assertNull(activated)
+        assertEquals(0, stops)
     }
 
     @Test

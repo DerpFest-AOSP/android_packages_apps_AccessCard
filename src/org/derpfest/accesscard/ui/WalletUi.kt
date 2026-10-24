@@ -278,15 +278,16 @@ fun WalletScreen(
     quick: Boolean = false,
     onOpenApp: () -> Unit = {},
     onClose: () -> Unit = {},
+    selectionSession: Int = 0,
 ) {
-    var selectedId by rememberSaveable { mutableStateOf<String?>(null) }
-    var consumedRequest by rememberSaveable { mutableStateOf<String?>(null) }
-    var showAll by rememberSaveable { mutableStateOf(false) }
-    var detailId by rememberSaveable { mutableStateOf<String?>(null) }
-    var about by rememberSaveable { mutableStateOf(false) }
+    var selectedId by rememberSaveable(selectionSession) { mutableStateOf<String?>(null) }
+    var consumedRequest by rememberSaveable(selectionSession) { mutableStateOf<String?>(null) }
+    var showAll by rememberSaveable(selectionSession) { mutableStateOf(false) }
+    var detailId by rememberSaveable(selectionSession) { mutableStateOf<String?>(null) }
+    var about by rememberSaveable(selectionSession) { mutableStateOf(false) }
     val cards = state.wallet.cards
     val ids = cards.map { it.id }
-    LaunchedEffect(ids, requestedCard) {
+    LaunchedEffect(ids, requestedCard, selectionSession) {
         if (requestedCard in ids && requestedCard != consumedRequest) {
             selectedId = requestedCard
             consumedRequest = requestedCard

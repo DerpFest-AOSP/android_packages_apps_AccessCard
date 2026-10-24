@@ -14,12 +14,17 @@ import androidx.compose.runtime.*
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.*
+import org.derpfest.accesscard.nfc.AccessMode
 import org.derpfest.accesscard.ui.AccessCardTheme
 import org.derpfest.accesscard.ui.WalletScreen
 
 class QuickAccessActivity : ComponentActivity() {
     private val model by lazy { ViewModelProvider(this)[AccessCardViewModel::class.java] }
     private var polling: Job? = null
+    private var entryJob: Job? = null
+    private var entering by mutableStateOf(true)
+    private var selectionSession by mutableIntStateOf(0)
+    private var entryCardId by mutableStateOf<String?>(null)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -31,9 +36,10 @@ class QuickAccessActivity : ComponentActivity() {
             val controller = model.controller
             AccessCardTheme {
                 WalletScreen(
-                    state,
+                    if (entering) state.copy(loading = true, operation = AccessMode.IDLE)
+                    else state,
                     controller.backend.capabilities,
-                    null,
+                    entryCardId,
                     onAdd = {
                         startActivity(Intent(this, ReaderActivity::class.java))
                         finish()
@@ -59,13 +65,37 @@ class QuickAccessActivity : ComponentActivity() {
                         finish()
                     },
                     onClose = ::finish,
+                    selectionSession = selectionSession,
                 )
             }
         }
     }
 
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        refreshEntry()
+    }
+
+    private fun refreshEntry() {
+        entryJob?.cancel()
+        entering = true
+        entryJob =
+            lifecycleScope.launch {
+                model.controller.refresh().join()
+                val latest = model.state.value
+                entryCardId =
+                    latest.activeCard?.id
+                        ?: latest.wallet.defaultId
+                        ?: latest.wallet.cards.firstOrNull()?.id
+                selectionSession++
+                entering = false
+            }
+    }
+
     override fun onStart() {
         super.onStart()
+        refreshEntry()
         window.setLayout(
             WindowManager.LayoutParams.MATCH_PARENT,
             WindowManager.LayoutParams.WRAP_CONTENT,
@@ -81,6 +111,7 @@ class QuickAccessActivity : ComponentActivity() {
     }
 
     override fun onStop() {
+        entryJob?.cancel()
         polling?.cancel()
         super.onStop()
     }
