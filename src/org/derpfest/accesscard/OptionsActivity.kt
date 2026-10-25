@@ -1,10 +1,14 @@
 // SPDX-License-Identifier: Apache-2.0
 package org.derpfest.accesscard
 
+import android.Manifest
 import android.app.Application
+import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Bundle
 import android.provider.DocumentsContract
+import android.provider.Settings
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -17,6 +21,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.*
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.ViewModelProvider
@@ -78,6 +83,12 @@ class OptionsViewModel(application: Application) : AndroidViewModel(application)
     fun theme(choice: ThemeChoice) =
         perform(R.string.preferences_saved) {
             wallet.preferences.update { it.copy(theme = choice) }
+        }
+
+    fun reminders(enabled: Boolean) =
+        perform(R.string.preferences_saved) {
+            wallet.preferences.update { it.copy(reminders = enabled) }
+            if (!enabled) wallet.reminders.cancel()
         }
 
     fun clear() = perform(R.string.diagnostics_cleared) { wallet.diagnostics.clear() }
@@ -233,6 +244,12 @@ class OptionsActivity : ComponentActivity() {
             if (it == null) model.clearPassword() else model.readBackup(it)
         }
 
+    private val notificationPermission =
+        registerForActivityResult(ActivityResultContracts.RequestPermission()) {
+            if (it) model.reminders(true)
+            else model.message.value = R.string.error_reminder_permission
+        }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
@@ -271,7 +288,10 @@ class OptionsActivity : ComponentActivity() {
                             OutlinedButton(
                                 { model.theme(choice) },
                                 enabled = !busy,
-                                modifier = Modifier.fillMaxWidth(),
+                                modifier =
+                                    Modifier.fillMaxWidth().semantics {
+                                        selected = preferences.theme == choice
+                                    },
                             ) {
                                 if (preferences.theme == choice) {
                                     Glyph(R.drawable.ic_check)
@@ -294,11 +314,66 @@ class OptionsActivity : ComponentActivity() {
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
                             Text(
+                                stringResource(R.string.reminder_preference),
+                                Modifier.weight(1f),
+                                style = MaterialTheme.typography.titleMedium,
+                            )
+                            Switch(
+                                preferences.reminders,
+                                { enabled ->
+                                    if (
+                                        enabled &&
+                                            checkSelfPermission(
+                                                Manifest.permission.POST_NOTIFICATIONS
+                                            ) != PackageManager.PERMISSION_GRANTED
+                                    )
+                                        notificationPermission.launch(
+                                            Manifest.permission.POST_NOTIFICATIONS
+                                        )
+                                    else model.reminders(enabled)
+                                },
+                                enabled = !busy,
+                                modifier =
+                                    Modifier.semantics {
+                                        contentDescription = getString(R.string.reminder_preference)
+                                    },
+                            )
+                        }
+                        Text(
+                            stringResource(R.string.reminder_detail),
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
+                        TextButton({
+                            try {
+                                startActivity(
+                                    Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS)
+                                        .putExtra(Settings.EXTRA_APP_PACKAGE, packageName)
+                                )
+                            } catch (_: Exception) {
+                                model.message.value = R.string.error_tools
+                            }
+                        }) {
+                            Text(stringResource(R.string.notification_settings))
+                        }
+                        HorizontalDivider()
+                        Row(
+                            Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Text(
                                 stringResource(R.string.debug_recording),
                                 Modifier.weight(1f),
                                 style = MaterialTheme.typography.titleMedium,
                             )
-                            Switch(preferences.debug, { model.debug(it) }, enabled = !busy)
+                            Switch(
+                                preferences.debug,
+                                { model.debug(it) },
+                                enabled = !busy,
+                                modifier =
+                                    Modifier.semantics {
+                                        contentDescription = getString(R.string.debug_recording)
+                                    },
+                            )
                         }
                         Text(
                             stringResource(R.string.debug_detail),

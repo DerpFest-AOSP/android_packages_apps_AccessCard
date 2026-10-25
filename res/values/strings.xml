@@ -147,4 +147,12 @@
     <string name="error_backup_export">The backup could not be saved. Check the selected location and try again.</string>
     <string name="error_import">Import could not finish. Complete other operations, check storage and retry. Existing cards have been preserved.</string>
     <string name="error_password_expired">This backup request expired. Enter the password and choose the file again.</string>
+    <string name="reminder_preference">Activation reminders</string>
+    <string name="reminder_detail">Show a one-minute reminder after settings are successfully applied. Tap to open card controls. This confirms a completed operation; use the app or Quick Settings for current status.</string>
+    <string name="reminder_title">Card settings applied</string>
+    <string name="reminder_body">Open AccessCard to check the current status or stop using the card.</string>
+    <string name="open_card_controls">Card controls</string>
+    <string name="reminder_channel">Card operations</string>
+    <string name="notification_settings">Notification settings</string>
+    <string name="error_reminder_permission">Notification permission was not granted. Reminders remain off.</string>
 </resources>

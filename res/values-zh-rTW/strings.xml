@@ -146,4 +146,12 @@
     <string name="error_backup_export">無法儲存備份，請確認選擇的位置後重試。</string>
     <string name="error_import">匯入未完成，請先完成其他操作、確認儲存空間後重試。既有卡片已保留。</string>
     <string name="error_password_expired">備份操作已失效，請重新輸入密碼並選擇檔案。</string>
+    <string name="reminder_preference">啟用完成提醒</string>
+    <string name="reminder_detail">設定套用成功後顯示一分鐘提醒，點選可開啟選卡與停用控制。提醒代表這次操作已完成，即時狀態請以 App 或快速設定面板為準。</string>
+    <string name="reminder_title">門禁卡設定已套用</string>
+    <string name="reminder_body">開啟 AccessCard 確認目前狀態或停用卡片。</string>
+    <string name="open_card_controls">開啟卡片控制</string>
+    <string name="reminder_channel">卡片操作提醒</string>
+    <string name="notification_settings">通知設定</string>
+    <string name="error_reminder_permission">尚未允許通知，啟用完成提醒維持關閉。</string>
 </resources>

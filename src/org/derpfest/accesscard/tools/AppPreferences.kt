@@ -12,7 +12,11 @@ enum class ThemeChoice {
     DARK,
 }
 
-data class Preferences(val debug: Boolean = false, val theme: ThemeChoice = ThemeChoice.SYSTEM)
+data class Preferences(
+    val debug: Boolean = false,
+    val theme: ThemeChoice = ThemeChoice.SYSTEM,
+    val reminders: Boolean = false,
+)
 
 class AppPreferences(context: Context) {
     private val file = context.getSharedPreferences("preferences", Context.MODE_PRIVATE)
@@ -22,6 +26,7 @@ class AppPreferences(context: Context) {
                 file.getBoolean("debug", false),
                 runCatching { ThemeChoice.valueOf(file.getString("theme", "SYSTEM")!!) }
                     .getOrDefault(ThemeChoice.SYSTEM),
+                file.getBoolean("reminders", false),
             )
         )
     val state = mutable.asStateFlow()
@@ -34,6 +39,7 @@ class AppPreferences(context: Context) {
                 .edit()
                 .putBoolean("debug", value.debug)
                 .putString("theme", value.theme.name)
+                .putBoolean("reminders", value.reminders)
                 .commit()
         )
             throw IOException("Preferences could not be saved")
