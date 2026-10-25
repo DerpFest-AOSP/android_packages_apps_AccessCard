@@ -87,6 +87,8 @@ class AospAccessCardBackend(context: Context) : AccessCardBackend {
             identity,
             state.getInt("owner_uid", -1),
             state.getLong("generation"),
+            failure = failure,
+            failedParameter = state.getInt("failed_parameter", -1),
         )
     }
 
