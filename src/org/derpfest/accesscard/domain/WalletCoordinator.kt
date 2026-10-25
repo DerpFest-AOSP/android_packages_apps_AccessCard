@@ -9,6 +9,8 @@ import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import org.derpfest.accesscard.data.CardStore
+import org.derpfest.accesscard.data.DiagnosticStore.Event
+import org.derpfest.accesscard.data.DiagnosticStore.Outcome
 import org.derpfest.accesscard.model.*
 import org.derpfest.accesscard.nfc.*
 
@@ -17,6 +19,7 @@ class WalletCoordinator(
     private val store: CardStore,
     val backend: AccessCardBackend,
     val scope: CoroutineScope,
+    private val diagnostics: (Event, Outcome, AccessFailure?, HardwareState) -> Unit = { _, _, _, _ -> },
     private val changed: () -> Unit = {},
 ) {
     private val mutex = Mutex()
@@ -46,6 +49,8 @@ class WalletCoordinator(
                 null
             }
         val hardware = inspect()
+        if (hardware.mode != mutable.value.hardware.mode || hardware.failure != mutable.value.hardware.failure)
+            emit(Event.REFRESH, Outcome.SUCCEEDED, hardware.failure, hardware)
         mutable.update {
             it.copy(
                 wallet = wallet ?: it.wallet,
@@ -79,25 +84,39 @@ class WalletCoordinator(
         }
     }
 
-    private fun perform(mode: AccessMode, action: () -> Unit): Job {
+    private fun emit(event: Event, outcome: Outcome, error: AccessFailure? = null,
+            hardware: HardwareState = mutable.value.hardware) {
+        // Optional diagnostics must never change wallet or NFC operation results.
+        runCatching { diagnostics(event, outcome, error, hardware) }
+    }
+
+    private fun perform(event: Event, mode: AccessMode, action: () -> Unit): Job {
         // Reserve before scheduling so rapid taps cannot queue conflicting hardware writes.
-        if (!operationPending.compareAndSet(false, true)) return scope.launch {}
+        if (!operationPending.compareAndSet(false, true)) return scope.launch {
+            emit(event, Outcome.FAILED, AccessFailure.BUSY)
+        }
         return scope.launch {
             try {
                 mutex.withLock {
                     if (readerToken != null) {
                         mutable.update { it.copy(message = AccessFailure.BUSY) }
+                        emit(event, Outcome.FAILED, AccessFailure.BUSY)
                         return@withLock
                     }
                     mutable.update { it.copy(operation = mode, message = null) }
+                    emit(event, Outcome.STARTED)
+                    var error: AccessFailure? = null
                     try {
                         action()
                     } catch (e: CancellationException) {
+                        error = AccessFailure.OPERATION_FAILED
                         throw e
                     } catch (e: Exception) {
-                        mutable.update { it.copy(message = failure(e)) }
+                        error = failure(e)
+                        mutable.update { it.copy(message = error) }
                     } finally {
                         refreshLocked()
+                        emit(event, if (error == null) Outcome.SUCCEEDED else Outcome.FAILED, error)
                     }
                 }
             } finally {
@@ -111,7 +130,7 @@ class WalletCoordinator(
     }
 
     fun activate(card: AccessCardProfile) =
-        perform(AccessMode.APPLYING) {
+        perform(Event.APPLY, AccessMode.APPLYING) {
             checkedHardware()
             if (!backend.canApply(card.identity)) throw AccessException(AccessFailure.INVALID_CARD)
             if (!backend.apply(card.identity))
@@ -119,7 +138,7 @@ class WalletCoordinator(
         }
 
     fun stop() =
-        perform(AccessMode.STOPPING) {
+        perform(Event.STOP, AccessMode.STOPPING) {
             val hardware = inspect()
             if (hardware.mode == AccessMode.NFC_OFF) throw AccessException(AccessFailure.NFC_OFF)
             if (hardware.mode == AccessMode.READING) throw AccessException(AccessFailure.BUSY)
@@ -127,14 +146,14 @@ class WalletCoordinator(
                 throw AccessException(inspect().failure ?: AccessFailure.RECOVERY_REQUIRED)
         }
 
-    fun update(card: AccessCardProfile) = perform(AccessMode.IDLE) { store.update(card) }
+    fun update(card: AccessCardProfile) = perform(Event.UPDATE, AccessMode.IDLE) { store.update(card) }
 
-    fun setDefault(id: String?) = perform(AccessMode.IDLE) { store.setDefault(id) }
+    fun setDefault(id: String?) = perform(Event.DEFAULT, AccessMode.IDLE) { store.setDefault(id) }
 
-    fun move(id: String, delta: Int) = perform(AccessMode.IDLE) { store.move(id, delta) }
+    fun move(id: String, delta: Int) = perform(Event.REORDER, AccessMode.IDLE) { store.move(id, delta) }
 
     fun delete(card: AccessCardProfile) =
-        perform(AccessMode.STOPPING) {
+        perform(Event.DELETE, AccessMode.STOPPING) {
             val hardware = inspect()
             if (hardware.mode == AccessMode.ERROR || hardware.needsRecovery) {
                 throw AccessException(hardware.failure ?: AccessFailure.SERVICE_UNAVAILABLE)
@@ -166,6 +185,7 @@ class WalletCoordinator(
             }
             UUID.randomUUID().toString().also { token ->
                 readerToken = token
+                emit(Event.READER_OPEN, Outcome.SUCCEEDED)
                 mutable.update {
                     it.copy(hardware = hardware, operation = AccessMode.READING, message = null)
                 }
@@ -177,6 +197,7 @@ class WalletCoordinator(
         mutex.withLock {
             if (readerToken == token) {
                 readerToken = null
+                emit(Event.READER_CLOSE, Outcome.SUCCEEDED)
                 mutable.update { it.copy(operation = null) }
                 refreshLocked()
                 changed()
@@ -196,7 +217,12 @@ class WalletCoordinator(
         scope.async {
             mutex.withLock {
                 try {
+                    emit(Event.SAVE, Outcome.STARTED)
                     store.add(id, name, identity, color, icon)
+                        .also { emit(Event.SAVE, Outcome.SUCCEEDED) }
+                } catch (e: Exception) {
+                    emit(Event.SAVE, Outcome.FAILED, failure(e))
+                    throw e
                 } finally {
                     refreshLocked()
                     changed()

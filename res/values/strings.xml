@@ -99,4 +99,21 @@
     <string name="error_journal">NFC recovery data is unavailable. NFC remains paused. Collect diagnostics before retrying.</string>
     <string name="error_discovery">NFC listening could not restart. Turn NFC off and on to restore normal operation.</string>
     <string name="retry_recovery">Retry NFC recovery</string>
+    <string name="preferences">Preferences</string>
+    <string name="theme">Appearance</string>
+    <string name="theme_system">Use system theme</string>
+    <string name="theme_light">Light</string>
+    <string name="theme_dark">Dark</string>
+    <string name="preferences_saved">Preferences saved.</string>
+    <string name="debug_recording">Debug recording</string>
+    <string name="debug_detail">Off by default. Records only while enabled: up to 512 events (16 KiB), from the last 24 hours. Turning this off deletes the private diagnostic cache. Card names, identifiers and backup passwords are never recorded.</string>
+    <string name="diagnostic_size">Diagnostic cache: %1$d bytes</string>
+    <string name="export_diagnostics">Export diagnostics</string>
+    <string name="clear_diagnostics">Clear diagnostic records</string>
+    <string name="diagnostics_cleared">Diagnostic records cleared.</string>
+    <string name="export_complete">Export completed.</string>
+    <string name="export_location_note">Exported files are saved where you choose. Turning off recording clears only the private cache; it does not delete files you exported.</string>
+    <string name="usage_rules">Using your cards</string>
+    <string name="usage_rules_detail">Use and stop cards explicitly. Restarting NFC or the phone does not automatically activate a saved card. Stop emulation before paying. Screen-off and locked-device behavior require device testing; no screen-off support is promised.</string>
+    <string name="error_tools">The operation could not be completed. Check storage and try again; no success has been reported.</string>
 </resources>

@@ -279,6 +279,7 @@ fun WalletScreen(
     onOpenApp: () -> Unit = {},
     onClose: () -> Unit = {},
     selectionSession: Int = 0,
+    onPreferences: () -> Unit = {},
 ) {
     var selectedId by rememberSaveable(selectionSession) { mutableStateOf<String?>(null) }
     var consumedRequest by rememberSaveable(selectionSession) { mutableStateOf<String?>(null) }
@@ -337,6 +338,9 @@ fun WalletScreen(
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
+                }
+                if (!quick) IconButton(onPreferences) {
+                    Glyph(R.drawable.ic_settings, stringResource(R.string.preferences))
                 }
                 IconButton(onClick = { if (quick) onClose() else about = true }) {
                     Glyph(

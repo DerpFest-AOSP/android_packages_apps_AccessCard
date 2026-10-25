@@ -98,4 +98,21 @@
     <string name="error_journal">無法存取 NFC 復原資料。NFC 已暫停，請收集診斷資訊後再重試。</string>
     <string name="error_discovery">無法重新啟動 NFC 感應。請關閉再開啟 NFC 以復原。</string>
     <string name="retry_recovery">重試 NFC 復原</string>
+    <string name="preferences">偏好設定</string>
+    <string name="theme">介面外觀</string>
+    <string name="theme_system">跟隨系統</string>
+    <string name="theme_light">淺色</string>
+    <string name="theme_dark">深色</string>
+    <string name="preferences_saved">偏好設定已儲存。</string>
+    <string name="debug_recording">診斷記錄開關</string>
+    <string name="debug_detail">預設關閉，開啟後才會記錄。最多保留最近 24 小時的 512 筆事件（16 KiB）。關閉時刪除 App 內的診斷暫存，不記錄卡片名稱、識別參數或備份密碼。</string>
+    <string name="diagnostic_size">診斷暫存：%1$d 位元組</string>
+    <string name="export_diagnostics">匯出診斷報告</string>
+    <string name="clear_diagnostics">清除診斷記錄</string>
+    <string name="diagnostics_cleared">診斷記錄已清除。</string>
+    <string name="export_complete">匯出完成。</string>
+    <string name="export_location_note">匯出檔案會儲存在您選擇的位置。關閉記錄只會清除 App 內的暫存，不會刪除已匯出的檔案。</string>
+    <string name="usage_rules">使用說明</string>
+    <string name="usage_rules_detail">請明確操作使用或停用卡片。重啟 NFC 或手機後不會自動啟用已儲存卡片，付款前請先停用門禁卡。熄屏與鎖定時的刷卡行為仍需各裝置實測，不保證支援熄屏刷卡。</string>
+    <string name="error_tools">操作未完成，請確認儲存空間後重試。</string>
 </resources>

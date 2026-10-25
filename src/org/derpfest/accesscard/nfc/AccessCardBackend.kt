@@ -63,6 +63,7 @@ class AospAccessCardBackend(context: Context) : AccessCardBackend {
                 AccessMode.ERROR,
                 needsRecovery = true,
                 failure = failure ?: AccessFailure.RECOVERY_REQUIRED,
+                failedParameter = state.getInt("failed_parameter", -1),
             )
         }
         if (state.getBoolean("reading")) return HardwareState(AccessMode.READING, failure = failure)
@@ -71,6 +72,7 @@ class AospAccessCardBackend(context: Context) : AccessCardBackend {
                 if (capabilities.canApplyIdentity) AccessMode.IDLE else AccessMode.UNSUPPORTED,
                 generation = state.getLong("generation"),
                 failure = failure,
+                failedParameter = state.getInt("failed_parameter", -1),
             )
         }
         val uid = requireNotNull(state.getByteArray("uid"))

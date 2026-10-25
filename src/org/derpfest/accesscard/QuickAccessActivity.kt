@@ -15,7 +15,7 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.*
 import org.derpfest.accesscard.nfc.AccessMode
-import org.derpfest.accesscard.ui.AccessCardTheme
+import org.derpfest.accesscard.tools.AppTheme
 import org.derpfest.accesscard.ui.WalletScreen
 
 class QuickAccessActivity : ComponentActivity() {
@@ -34,7 +34,7 @@ class QuickAccessActivity : ComponentActivity() {
         setContent {
             val state by model.state.collectAsState()
             val controller = model.controller
-            AccessCardTheme {
+            AppTheme(controller.preferences) {
                 WalletScreen(
                     if (entering) state.copy(loading = true, operation = AccessMode.IDLE)
                     else state,

@@ -36,6 +36,7 @@ data class HardwareState(
     val generation: Long = 0,
     val needsRecovery: Boolean = false,
     val failure: AccessFailure? = null,
+    val failedParameter: Int = -1,
 )
 
 interface AccessCardBackend {

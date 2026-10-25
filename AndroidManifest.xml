@@ -21,6 +21,7 @@
                 <category android:name="android.intent.category.DEFAULT" />
             </intent-filter>
         </activity>
+        <activity android:name=".OptionsActivity" android:exported="false" />
         <activity android:name=".ReaderActivity" android:exported="false" />
         <activity android:name=".QuickAccessActivity" android:exported="false"
             android:excludeFromRecents="true" android:launchMode="singleTop"

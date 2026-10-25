@@ -16,7 +16,7 @@ import androidx.compose.runtime.*
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.*
-import org.derpfest.accesscard.ui.AccessCardTheme
+import org.derpfest.accesscard.tools.AppTheme
 import org.derpfest.accesscard.ui.WalletScreen
 
 const val EXTRA_SELECTED_CARD = "org.derpfest.accesscard.SELECTED_CARD"
@@ -39,7 +39,7 @@ class MainActivity : ComponentActivity() {
         setContent {
             val state by model.state.collectAsState()
             val controller = model.controller
-            AccessCardTheme {
+            AppTheme(controller.preferences) {
                 WalletScreen(
                     state,
                     controller.backend.capabilities,
@@ -55,6 +55,7 @@ class MainActivity : ComponentActivity() {
                     onNfcSettings = ::openNfcSettings,
                     onRefresh = { controller.refresh() },
                     onClearMessage = controller::clearMessage,
+                    onPreferences = { startActivity(Intent(this, OptionsActivity::class.java)) },
                 )
             }
         }

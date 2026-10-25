@@ -8,12 +8,16 @@ import kotlinx.coroutines.*
 import org.derpfest.accesscard.data.CardStore
 import org.derpfest.accesscard.model.*
 import org.derpfest.accesscard.nfc.*
+import org.derpfest.accesscard.tools.*
 
 /** Android bindings; all launchers use one coordinator per Android user process. */
 class WalletController(context: Context, val backend: AccessCardBackend) {
     val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    val preferences = AppPreferences(context)
+    val diagnostics = Diagnostics(context, preferences)
     val coordinator =
-        WalletCoordinator(CardStore.inDirectory(context.filesDir), backend, scope) {
+        WalletCoordinator(CardStore.inDirectory(context.filesDir), backend, scope,
+            diagnostics = diagnostics::record) {
             TileService.requestListeningState(
                 context,
                 ComponentName(context, AccessCardTileService::class.java),
@@ -22,6 +26,7 @@ class WalletController(context: Context, val backend: AccessCardBackend) {
     val state = coordinator.state
 
     init {
+        scope.launch { runCatching { diagnostics.initialize() } }
         refresh()
     }
 

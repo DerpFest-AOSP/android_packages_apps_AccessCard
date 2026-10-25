@@ -24,9 +24,12 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.*
 import kotlinx.coroutines.*
+import kotlinx.coroutines.flow.*
+import org.derpfest.accesscard.data.DiagnosticStore
 import org.derpfest.accesscard.model.*
 import org.derpfest.accesscard.nfc.*
 import org.derpfest.accesscard.ui.*
+import org.derpfest.accesscard.tools.AppTheme
 
 class ReaderViewModel(application: Application, initial: ReaderState) :
     AndroidViewModel(application) {
@@ -36,6 +39,21 @@ class ReaderViewModel(application: Application, initial: ReaderState) :
         ReaderSession(wallet.coordinator, scope, initial) {
             application.getString(R.string.default_name, it)
         }
+
+    init {
+        scope.launch {
+            session.state.map { it.phase to it.error }.distinctUntilChanged().collect { (phase, error) ->
+                val outcome = when (phase) {
+                    ReaderPhase.READING -> DiagnosticStore.Outcome.STARTED
+                    ReaderPhase.FOUND -> DiagnosticStore.Outcome.SUCCEEDED
+                    ReaderPhase.ERROR -> DiagnosticStore.Outcome.FAILED
+                    else -> null
+                }
+                if (outcome != null) wallet.diagnostics.record(DiagnosticStore.Event.READ,
+                    outcome, error, wallet.state.value.hardware)
+            }
+        }
+    }
 
     override fun onCleared() {
         // Close the connection and release the shared lease before cancelling its owner.
@@ -109,7 +127,7 @@ class ReaderActivity : ComponentActivity() {
                 }
             }
         }
-        setContent { AccessCardTheme { ReaderScreen() } }
+        setContent { AppTheme(wallet.preferences) { ReaderScreen() } }
     }
 
     override fun onResume() {

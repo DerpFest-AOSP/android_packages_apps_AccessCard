@@ -412,4 +412,20 @@ class WalletCoordinatorTest {
         assertEquals(0, backend.applies)
         assertFalse(wallet.state.value.busy)
     }
+    @Test
+    fun diagnosticFailureCannotBreakActivationOrStopping() = runTest {
+        val backend = Backend()
+        val owner = CoroutineScope(SupervisorJob() + StandardTestDispatcher(testScheduler))
+        val wallet = WalletCoordinator(CardStore(Storage()), backend, owner,
+            diagnostics = { _, _, _, _ -> throw IOException("Full diagnostic cache") })
+        try {
+            wallet.activate(profile()).join()
+            assertEquals(AccessMode.ACTIVE, wallet.state.value.hardware.mode)
+            assertNull(wallet.state.value.message)
+            wallet.stop().join()
+            assertEquals(AccessMode.IDLE, wallet.state.value.hardware.mode)
+            assertNull(wallet.state.value.message)
+        } finally { owner.cancel() }
+    }
+
 }
