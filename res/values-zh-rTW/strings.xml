@@ -128,4 +128,22 @@
     <string name="test_rejected">門禁未接受此卡片</string>
     <string name="test_inconclusive">結果尚未確認</string>
     <string name="delete_test">刪除此紀錄</string>
+    <string name="backup_title">卡片備份</string>
+    <string name="backup_detail">以密碼加密備份卡片、排序、外觀、備註與手動測試紀錄，不包含診斷記錄、App 偏好或 NFC 啟用狀態。</string>
+    <string name="export_backup">匯出加密備份</string>
+    <string name="import_backup">匯入加密備份</string>
+    <string name="backup_password">備份密碼</string>
+    <string name="confirm_password">確認密碼</string>
+    <string name="password_detail">請使用 12 至 256 個字元。App 不會儲存密碼，也無法協助復原；若此步驟中斷，請重新輸入。</string>
+    <string name="continue_action">繼續</string>
+    <string name="import_ready">備份已開啟，請確認後匯入。</string>
+    <string name="import_completed">匯入完成，未啟用任何卡片。</string>
+    <string name="import_counts">已新增 %1$d 張卡片，略過 %2$d 張既有卡片。</string>
+    <string name="import_review">匯入這些卡片？</string>
+    <string name="import_review_detail">此備份包含 %1$d 張卡片。將保留既有卡片及修改，略過重複 UID，不會自動啟用卡片。</string>
+    <string name="import_confirm">匯入卡片</string>
+    <string name="error_backup_open">無法開啟備份，請確認密碼及檔案。不支援的格式、不完整或遭修改的備份會被拒絕。</string>
+    <string name="error_backup_export">無法儲存備份，請確認選擇的位置後重試。</string>
+    <string name="error_import">匯入未完成，請先完成其他操作、確認儲存空間後重試。既有卡片已保留。</string>
+    <string name="error_password_expired">備份操作已失效，請重新輸入密碼並選擇檔案。</string>
 </resources>

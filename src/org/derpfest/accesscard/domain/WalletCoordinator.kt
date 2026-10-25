@@ -230,6 +230,30 @@ class WalletCoordinator(
             }
         }
 
+    suspend fun snapshotForBackup(): WalletSnapshot = mutex.withLock { store.load() }
+
+    /** Import local records under the same operation gate. Never apply an imported identity. */
+    fun importCards(incoming: WalletSnapshot): Deferred<CardStore.ImportResult> = scope.async {
+        if (!operationPending.compareAndSet(false, true)) throw AccessException(AccessFailure.BUSY)
+        try {
+            mutex.withLock {
+                if (readerToken != null) throw AccessException(AccessFailure.BUSY)
+                mutable.update { it.copy(operation = AccessMode.IDLE, message = null) }
+                emit(Event.IMPORT, Outcome.STARTED)
+                try {
+                    store.merge(incoming).also { emit(Event.IMPORT, Outcome.SUCCEEDED) }
+                } catch (e: Exception) {
+                    emit(Event.IMPORT, Outcome.FAILED, failure(e))
+                    throw e
+                } finally { refreshLocked() }
+            }
+        } finally {
+            mutable.update { it.copy(operation = if (readerToken != null) AccessMode.READING else null) }
+            operationPending.set(false)
+            changed()
+        }
+    }
+
     fun clearMessage() {
         mutable.update { it.copy(message = null) }
     }

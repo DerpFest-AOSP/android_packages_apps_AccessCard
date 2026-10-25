@@ -233,4 +233,26 @@ class WalletUiTest {
         assertNull(activated)
     }
 
+    @Test
+    fun encryptedExportRequiresMatchingPasswords() {
+        var password: CharArray? = null
+        compose.setContent { AccessCardTheme { BackupPasswordDialog(true, {}, { password = it }) } }
+        compose.onNodeWithText(text(R.string.continue_action)).assertIsNotEnabled()
+        compose.onNodeWithText(text(R.string.backup_password)).performTextInput("long enough password")
+        compose.onNodeWithText(text(R.string.confirm_password)).performTextInput("different password")
+        compose.onNodeWithText(text(R.string.continue_action)).assertIsNotEnabled()
+        compose.onNodeWithText(text(R.string.confirm_password)).performTextReplacement("long enough password")
+        compose.onNodeWithText(text(R.string.continue_action)).performClick()
+        assertArrayEquals("long enough password".toCharArray(), password)
+        password?.fill('\u0000')
+    }
+
+    @Test
+    fun importReviewDoesNotConfirmWhileBusy() {
+        var confirms = 0
+        compose.setContent { AccessCardTheme { ImportReviewDialog(2, true, false, {}, { confirms++ }) } }
+        compose.onNodeWithText(text(R.string.import_confirm)).assertIsNotEnabled()
+        assertEquals(0, confirms)
+    }
+
 }

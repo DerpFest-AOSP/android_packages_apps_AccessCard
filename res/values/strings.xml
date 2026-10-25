@@ -129,4 +129,22 @@
     <string name="test_rejected">Reader rejected the card</string>
     <string name="test_inconclusive">Result not confirmed</string>
     <string name="delete_test">Remove this record</string>
+    <string name="backup_title">Wallet backup</string>
+    <string name="backup_detail">Password-encrypted backups include cards, order, appearance, notes and manual test records. They do not include debug recordings, app preferences or NFC activation state.</string>
+    <string name="export_backup">Export encrypted backup</string>
+    <string name="import_backup">Import encrypted backup</string>
+    <string name="backup_password">Backup password</string>
+    <string name="confirm_password">Confirm password</string>
+    <string name="password_detail">Use 12–256 characters. The password is not stored and cannot be recovered. Reenter it if this step is interrupted.</string>
+    <string name="continue_action">Continue</string>
+    <string name="import_ready">Backup opened. Review before importing.</string>
+    <string name="import_completed">Import completed. No card was activated.</string>
+    <string name="import_counts">Added %1$d cards; skipped %2$d existing cards.</string>
+    <string name="import_review">Import these cards?</string>
+    <string name="import_review_detail">This backup contains %1$d cards. Existing cards and their edits are kept. Duplicate UIDs are skipped. Importing never activates a card.</string>
+    <string name="import_confirm">Import cards</string>
+    <string name="error_backup_open">The backup could not be opened. Check the password and file. Unsupported, incomplete or changed backups are rejected.</string>
+    <string name="error_backup_export">The backup could not be saved. Check the selected location and try again.</string>
+    <string name="error_import">Import could not finish. Complete other operations, check storage and retry. Existing cards have been preserved.</string>
+    <string name="error_password_expired">This backup request expired. Enter the password and choose the file again.</string>
 </resources>

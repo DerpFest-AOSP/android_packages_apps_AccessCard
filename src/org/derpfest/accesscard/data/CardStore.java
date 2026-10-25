@@ -190,6 +190,36 @@ public final class CardStore {
         save(new WalletSnapshot(cards, id.equals(current.getDefaultId()) ? null : current.getDefaultId()));
     }
 
+    public static final class ImportResult {
+        public final int added, skipped;
+        ImportResult(int added, int skipped) { this.added = added; this.skipped = skipped; }
+    }
+
+    /** Merge data only. Existing UIDs, order, notes and defaults always win. */
+    public synchronized ImportResult merge(WalletSnapshot incoming) throws IOException {
+        WalletSnapshot current = load();
+        List<AccessCardProfile> cards = new ArrayList<>(current.getCards());
+        Set<String> ids = new HashSet<>(), uids = new HashSet<>();
+        for (AccessCardProfile card : cards) { ids.add(card.getId()); uids.add(card.getIdentity().getUidHex()); }
+        int skipped = 0, added = 0;
+        String importedDefault = null;
+        for (AccessCardProfile card : incoming.getCards()) {
+            if (!uids.add(card.getIdentity().getUidHex())) { skipped++; continue; }
+            String id = card.getId();
+            while (!ids.add(id)) id = UUID.randomUUID().toString();
+            cards.add(new AccessCardProfile(id, card.getName(), card.getIdentity(), card.getColor(),
+                    card.getIcon(), card.getCreatedAt(), card.getNotes(), card.getTests()));
+            if (card.getId().equals(incoming.getDefaultId())) importedDefault = id;
+            added++;
+        }
+        try {
+            WalletSnapshot merged = new WalletSnapshot(cards,
+                    current.getCards().isEmpty() ? importedDefault : current.getDefaultId());
+            if (added > 0) save(merged);
+        } catch (IllegalArgumentException e) { throw new IOException("Import exceeds wallet limits", e); }
+        return new ImportResult(added, skipped);
+    }
+
     private static int find(List<AccessCardProfile> cards, String id) throws IOException {
         for (int i = 0; i < cards.size(); i++) if (cards.get(i).getId().equals(id)) return i;
         throw new IOException("Unknown card");

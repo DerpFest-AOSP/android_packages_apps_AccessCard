@@ -428,4 +428,34 @@ class WalletCoordinatorTest {
         } finally { owner.cancel() }
     }
 
+    @Test
+    fun importingCardsKeepsActiveHardwareAndExistingDefault() = runCase { _, store, backend, wallet ->
+        val active = store.add("Existing", identity(), 0, 0)
+        wallet.activate(active).join()
+        val incoming = profile(2)
+        val result = wallet.importCards(WalletSnapshot(listOf(incoming), incoming.id)).await()
+        assertEquals(1, result.added)
+        assertEquals(2, wallet.state.value.wallet.cards.size)
+        assertEquals(active.id, wallet.state.value.wallet.defaultId)
+        assertEquals(active.identity, wallet.state.value.hardware.identity)
+        assertEquals(1, backend.applies)
+        assertEquals(0, backend.stops)
+    }
+
+    @Test
+    fun importingDuringReadLeaseIsRejectedWithoutMutatingWallet() = runCase { _, store, backend, wallet ->
+        store.add("Existing", identity(), 0, 0)
+        val token = wallet.beginReading()
+        try {
+            val incoming = profile(2)
+            try {
+                wallet.importCards(WalletSnapshot(listOf(incoming), null)).await()
+                fail("Expected a busy reader lease")
+            } catch (e: AccessException) { assertEquals(AccessFailure.BUSY, e.failure) }
+            assertEquals(1, store.load().cards.size)
+            assertEquals(0, backend.applies)
+            assertEquals(0, backend.stops)
+        } finally { wallet.endReading(token) }
+    }
+
 }
