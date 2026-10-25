@@ -116,4 +116,17 @@
     <string name="usage_rules">Using your cards</string>
     <string name="usage_rules_detail">Use and stop cards explicitly. Restarting NFC or the phone does not automatically activate a saved card. Stop emulation before paying. Screen-off and locked-device behavior require device testing; no screen-off support is promised.</string>
     <string name="error_tools">The operation could not be completed. Check storage and try again; no success has been reported.</string>
+    <string name="card_notes">Notes</string>
+    <string name="search_cards">Search names or notes</string>
+    <string name="no_search_results">No matching cards.</string>
+    <string name="add_test_record">Add a test record</string>
+    <string name="test_history">Manual test history</string>
+    <string name="test_location">Access reader or location</string>
+    <string name="test_note">Test notes</string>
+    <string name="manual_test_note">User-reported observations, not device certification. Keeps the latest 20 records per card. These records never change hardware qualification.</string>
+    <string name="no_tests">No manual tests recorded.</string>
+    <string name="test_accepted">Reader accepted the card</string>
+    <string name="test_rejected">Reader rejected the card</string>
+    <string name="test_inconclusive">Result not confirmed</string>
+    <string name="delete_test">Remove this record</string>
 </resources>

@@ -205,4 +205,32 @@ class WalletUiTest {
         compose.onNodeWithText(text(R.string.all_cards)).performClick()
         compose.onAllNodesWithText(a.name).onLast().assertIsDisplayed()
     }
+    @Test
+    fun searchFindsNotesWithoutActivatingAndReorderingClearsFilter() {
+        val a = card(1, "Home")
+        val b = card(2, "Office").withNotes("South entrance")
+        show(WalletState(wallet = WalletSnapshot(listOf(a, b), a.id), loading = false))
+        compose.onNodeWithText(text(R.string.all_cards)).performClick()
+        compose.onNodeWithTag("card_search").performTextInput("sOuTh")
+        compose.onNodeWithTag("card_list_row_${a.id}").assertDoesNotExist()
+        compose.onNodeWithTag("card_list_row_${b.id}").assertIsDisplayed()
+        compose.onNodeWithText(text(R.string.edit_order)).performClick()
+        compose.onNodeWithTag("card_search").assertIsNotEnabled()
+        compose.onNodeWithTag("card_list_row_${a.id}").assertExists()
+        assertNull(activated)
+    }
+
+    @Test
+    fun manualTestRequiresLocationAndUsesExplicitUserResult() {
+        var saved: CardTestRecord? = null
+        compose.setContent { AccessCardTheme { ManualTestDialog({}, { saved = it }) } }
+        compose.onNodeWithText(text(R.string.save_changes)).assertIsNotEnabled()
+        compose.onNodeWithText(text(R.string.test_location)).performTextInput("Lobby")
+        compose.onNodeWithText(text(R.string.test_rejected)).performClick()
+        compose.onNodeWithText(text(R.string.save_changes)).performClick()
+        assertEquals("Lobby", saved?.location)
+        assertEquals(CardTestRecord.Result.REJECTED, saved?.result)
+        assertNull(activated)
+    }
+
 }

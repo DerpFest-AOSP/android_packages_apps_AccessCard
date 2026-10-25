@@ -227,7 +227,7 @@ public class CardStoreTest {
     @Test public void migratesVersionOneWithoutChangingProfilesOrDefault() throws Exception {
         storage.bytes = legacyWallet();
         WalletSnapshot loaded = store.load();
-        assertEquals(2, ByteBuffer.wrap(storage.bytes).getInt(4));
+        assertEquals(3, ByteBuffer.wrap(storage.bytes).getInt(4));
         assertEquals("Home", loaded.getCards().get(0).getName());
         assertEquals(first, loaded.getCards().get(0).getIdentity());
         assertEquals(loaded.getCards().get(0).getId(), loaded.getDefaultId());
@@ -242,7 +242,7 @@ public class CardStoreTest {
         assertArrayEquals(legacy, storage.bytes);
         storage.failWrite = false;
         assertEquals(1, store.load().getCards().size());
-        assertEquals(2, ByteBuffer.wrap(storage.bytes).getInt(4));
+        assertEquals(3, ByteBuffer.wrap(storage.bytes).getInt(4));
     }
 
     @Test public void corruptLegacyDataIsNeverMigrated() throws Exception {
@@ -261,6 +261,48 @@ public class CardStoreTest {
         assertEquals("Renamed", retried.getName());
         assertEquals(1, store.load().getCards().size());
         assertThrows(IOException.class, () -> store.add(operation, "Another", second, 0, 0));
+    }
+
+    @Test public void notesAndManualTestsSurviveStorageAndAppearanceChanges() throws Exception {
+        AccessCardProfile card = store.add("Home", first, 0, 0);
+        CardTestRecord record = new CardTestRecord(UUID.randomUUID().toString(), "Lobby", "Tried twice",
+                1234, CardTestRecord.Result.ACCEPTED);
+        store.update(card.withNotes("South entrance").withTest(record).withAppearance("Building", 1, 2));
+        AccessCardProfile loaded = new CardStore(storage).load().getCards().get(0);
+        assertEquals("South entrance", loaded.getNotes());
+        assertEquals("Lobby", loaded.getTests().get(0).getLocation());
+        assertEquals(CardTestRecord.Result.ACCEPTED, loaded.getTests().get(0).getResult());
+        assertEquals(1234, loaded.getTests().get(0).getTestedAt());
+        assertEquals(first, loaded.getIdentity());
+        store.update(loaded.withoutTest(record.getId()));
+        assertTrue(store.load().getCards().get(0).getTests().isEmpty());
+    }
+
+    @Test public void testHistoryIsBoundedAndCannotMutateProfiles() throws Exception {
+        AccessCardProfile card = store.add("Home", first, 0, 0);
+        for (int i=0; i<30; i++) card = card.withTest(new CardTestRecord(UUID.randomUUID().toString(),
+                "Gate " + i, "", i, CardTestRecord.Result.INCONCLUSIVE));
+        store.update(card);
+        assertEquals(20, card.getTests().size());
+        assertEquals("Gate 29", card.getTests().get(0).getLocation());
+        assertThrows(UnsupportedOperationException.class, () -> store.load().getCards().get(0).getTests().clear());
+        assertThrows(IllegalArgumentException.class, () -> store.load().getCards().get(0).withNotes("x".repeat(513)));
+        assertThrows(IllegalArgumentException.class, () -> new CardTestRecord(UUID.randomUUID().toString(),
+                "", "", 0, CardTestRecord.Result.ACCEPTED));
+    }
+
+    @Test public void migratesVersionTwoWithoutChangingOrderOrIdentity() throws Exception {
+        byte[] v1 = legacyWallet();
+        byte[] payload = Arrays.copyOf(v1, v1.length - 8);
+        ByteBuffer.wrap(payload).putInt(4, 2);
+        byte[] digest = java.security.MessageDigest.getInstance("SHA-256").digest(payload);
+        ByteArrayOutputStream bytes = new ByteArrayOutputStream(); bytes.write(payload); bytes.write(digest);
+        storage.bytes = bytes.toByteArray();
+        AccessCardProfile loaded = store.load().getCards().get(0);
+        assertEquals(3, ByteBuffer.wrap(storage.bytes).getInt(4));
+        assertEquals(first, loaded.getIdentity());
+        assertEquals("", loaded.getNotes());
+        assertTrue(loaded.getTests().isEmpty());
     }
 
     private static final class FakeGateway implements WalletActions.Gateway {

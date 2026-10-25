@@ -636,6 +636,10 @@ private fun AllCardsSheet(
     onMove: (String, Int) -> Unit,
 ) {
     var editing by rememberSaveable { mutableStateOf(false) }
+    var query by rememberSaveable { mutableStateOf("") }
+    val visibleCards = if (editing) state.wallet.cards else state.wallet.cards.filter {
+        it.name.contains(query.trim(), ignoreCase = true) || it.notes.contains(query.trim(), ignoreCase = true)
+    }
     ModalBottomSheet(onClose) {
         Row(
             Modifier.fillMaxWidth().padding(horizontal = 24.dp),
@@ -646,16 +650,20 @@ private fun AllCardsSheet(
                 Modifier.weight(1f),
                 style = MaterialTheme.typography.headlineSmall,
             )
-            TextButton({ editing = !editing }) {
+            TextButton({ editing = !editing; query = "" }) {
                 Text(stringResource(if (editing) R.string.done else R.string.edit_order))
             }
         }
+        OutlinedTextField(query, { query = it.take(128) }, enabled = !editing,
+            label = { Text(stringResource(R.string.search_cards)) }, singleLine = true,
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 8.dp).testTag("card_search"))
+        if (visibleCards.isEmpty()) Text(stringResource(R.string.no_search_results), Modifier.padding(24.dp))
         LazyColumn(
             Modifier.fillMaxWidth().heightIn(max = 480.dp),
             contentPadding = PaddingValues(16.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            itemsIndexed(state.wallet.cards, key = { _, card -> card.id }) { index, card ->
+            itemsIndexed(visibleCards, key = { _, card -> card.id }) { index, card ->
                 Surface(
                     shape = RoundedCornerShape(18.dp),
                     color =
@@ -665,6 +673,7 @@ private fun AllCardsSheet(
                     Row(
                         Modifier.fillMaxWidth()
                             .clickable(enabled = !editing) { onSelect(card.id) }
+                            .testTag("card_list_row_${card.id}")
                             .padding(14.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
@@ -804,6 +813,9 @@ private fun DetailsSheet(
     var name by rememberSaveable(card.id) { mutableStateOf(card.name) }
     var color by rememberSaveable(card.id) { mutableIntStateOf(card.color) }
     var icon by rememberSaveable(card.id) { mutableIntStateOf(card.icon) }
+    var notes by rememberSaveable(card.id) { mutableStateOf(card.notes) }
+    var showTests by rememberSaveable { mutableStateOf(false) }
+    var addTest by rememberSaveable(card.id) { mutableStateOf(false) }
     var technical by rememberSaveable { mutableStateOf(false) }
     var confirmDelete by rememberSaveable { mutableStateOf(false) }
     ModalBottomSheet(onClose) {
@@ -841,9 +853,13 @@ private fun DetailsSheet(
                 { icon = it },
                 !state.busy,
             )
+            OutlinedTextField(notes, { if (it.length <= 512) notes = it },
+                label = { Text(stringResource(R.string.card_notes)) },
+                supportingText = { Text("${notes.length}/512") }, enabled = !state.busy,
+                minLines = 2, maxLines = 5, modifier = Modifier.fillMaxWidth())
             Button(
                 {
-                    onUpdate(card.withAppearance(name, color, icon))
+                    onUpdate(card.withAppearance(name, color, icon).withNotes(notes))
                     onClose()
                 },
                 enabled = name.isNotBlank() && !state.busy,
@@ -860,6 +876,13 @@ private fun DetailsSheet(
                 Text(
                     stringResource(if (isDefault) R.string.clear_default else R.string.set_default)
                 )
+            }
+            TextButton({ showTests = !showTests }) { Text(stringResource(R.string.test_history)) }
+            if (showTests) {
+                ManualTestHistory(card.tests, !state.busy) { onUpdate(card.withoutTest(it)) }
+                OutlinedButton({ addTest = true }, enabled = !state.busy) {
+                    Text(stringResource(R.string.add_test_record))
+                }
             }
             TextButton({ technical = !technical }) {
                 Text(stringResource(R.string.technical_details))
@@ -881,6 +904,10 @@ private fun DetailsSheet(
             }
             Spacer(Modifier.height(16.dp))
         }
+    }
+    if (addTest) ManualTestDialog({ addTest = false }) {
+        onUpdate(card.withTest(it))
+        addTest = false
     }
     if (confirmDelete)
         AlertDialog(

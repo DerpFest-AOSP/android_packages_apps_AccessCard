@@ -4,6 +4,7 @@ package org.derpfest.accesscard.data;
 import org.derpfest.accesscard.model.AccessCardProfile;
 import org.derpfest.accesscard.model.CardIdentity;
 import org.derpfest.accesscard.model.WalletSnapshot;
+import org.derpfest.accesscard.model.CardTestRecord;
 import java.io.*;
 import java.nio.file.*;
 import java.util.*;
@@ -14,8 +15,8 @@ import java.security.NoSuchAlgorithmException;
 /** Versioned, bounded wallet storage. A failed write never replaces the previous wallet. */
 public final class CardStore {
     private static final int MAGIC = 0x41434344;
-    private static final int VERSION = 2;
-    private static final int MAX_BYTES = 256 * 1024;
+    private static final int VERSION = 3;
+    public static final int MAX_BYTES = 2 * 1024 * 1024;
     public interface Storage {
         byte[] read() throws IOException;
         void write(byte[] data) throws IOException;
@@ -54,12 +55,20 @@ public final class CardStore {
     public synchronized WalletSnapshot load() throws IOException {
         byte[] bytes = storage.read();
         if (bytes == null) return WalletSnapshot.empty();
+        WalletSnapshot wallet = decode(bytes);
+        int version = java.nio.ByteBuffer.wrap(bytes).getInt(4);
+        if (version < VERSION) save(wallet);
+        return wallet;
+    }
+
+    public static WalletSnapshot decode(byte[] bytes) throws IOException {
+        if (bytes == null) throw new IOException("Missing wallet");
         if (bytes.length < 20 || bytes.length > MAX_BYTES) throw new IOException("Invalid wallet");
         try {
             DataInputStream header = new DataInputStream(new ByteArrayInputStream(bytes));
             if (header.readInt() != MAGIC) throw new IOException("Unknown wallet format");
             int version = header.readInt();
-            if (version != 1 && version != VERSION) {
+            if (version < 1 || version > VERSION) {
                 throw new IOException("Unsupported wallet version: " + version);
             }
             int checksumLength = version == 1 ? 8 : 32;
@@ -94,13 +103,23 @@ public final class CardStore {
                 byte[] atqa = new byte[2];
                 input.readFully(atqa);
                 CardIdentity identity = new CardIdentity(uid, atqa, input.readUnsignedByte());
-                cards.add(new AccessCardProfile(id, name, identity, color, icon, created));
+                String notes = version >= 3 ? input.readUTF() : "";
+                List<CardTestRecord> tests = new ArrayList<>();
+                if (version >= 3) {
+                    int testCount = input.readUnsignedByte();
+                    if (testCount > AccessCardProfile.MAX_TESTS) throw new IOException("Too many tests");
+                    for (int j = 0; j < testCount; j++) {
+                        String testId = input.readUTF(), location = input.readUTF(), note = input.readUTF();
+                        long testedAt = input.readLong();
+                        int result = input.readUnsignedByte();
+                        if (result >= CardTestRecord.Result.values().length) throw new IOException("Invalid test result");
+                        tests.add(new CardTestRecord(testId, location, note, testedAt, CardTestRecord.Result.values()[result]));
+                    }
+                }
+                cards.add(new AccessCardProfile(id, name, identity, color, icon, created, notes, tests));
             }
             if (input.available() != 0) throw new IOException("Unexpected wallet data");
             WalletSnapshot wallet = new WalletSnapshot(cards, defaultId.isEmpty() ? null : defaultId);
-            // Validate the entire old record before atomically migrating it. Never rewrite
-            // corrupt data or unknown versions, and propagate migration write failures.
-            if (version == 1) save(wallet);
             return wallet;
         } catch (IllegalArgumentException | NullPointerException e) {
             throw new IOException("Invalid wallet data", e);
@@ -184,7 +203,9 @@ public final class CardStore {
         }
     }
 
-    private void save(WalletSnapshot wallet) throws IOException {
+    private void save(WalletSnapshot wallet) throws IOException { storage.write(encode(wallet)); }
+
+    public static byte[] encode(WalletSnapshot wallet) throws IOException {
         ByteArrayOutputStream bytes = new ByteArrayOutputStream();
         DataOutputStream output = new DataOutputStream(bytes);
         output.writeInt(MAGIC);
@@ -201,11 +222,17 @@ public final class CardStore {
             output.write(card.getIdentity().getUid());
             output.write(card.getIdentity().getAtqa());
             output.writeByte(card.getIdentity().getSak());
+            output.writeUTF(card.getNotes());
+            output.writeByte(card.getTests().size());
+            for (CardTestRecord test : card.getTests()) {
+                output.writeUTF(test.getId()); output.writeUTF(test.getLocation()); output.writeUTF(test.getNote());
+                output.writeLong(test.getTestedAt()); output.writeByte(test.getResult().ordinal());
+            }
         }
         output.flush();
         output.write(sha256(bytes.toByteArray()));
         output.flush();
         if (bytes.size() > MAX_BYTES) throw new IOException("Wallet exceeds size limit");
-        storage.write(bytes.toByteArray());
+        return bytes.toByteArray();
     }
 }

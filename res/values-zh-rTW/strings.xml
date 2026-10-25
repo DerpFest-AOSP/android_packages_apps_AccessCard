@@ -115,4 +115,17 @@
     <string name="usage_rules">使用說明</string>
     <string name="usage_rules_detail">請明確操作使用或停用卡片。重啟 NFC 或手機後不會自動啟用已儲存卡片，付款前請先停用門禁卡。熄屏與鎖定時的刷卡行為仍需各裝置實測，不保證支援熄屏刷卡。</string>
     <string name="error_tools">操作未完成，請確認儲存空間後重試。</string>
+    <string name="card_notes">卡片備註</string>
+    <string name="search_cards">搜尋名稱或備註</string>
+    <string name="no_search_results">沒有符合的卡片。</string>
+    <string name="add_test_record">新增測試紀錄</string>
+    <string name="test_history">手動測試紀錄</string>
+    <string name="test_location">讀卡器或測試位置</string>
+    <string name="test_note">測試備註</string>
+    <string name="manual_test_note">由使用者手動填寫，不是裝置認證結果。每張卡最多保留最近 20 筆，不會改變硬體支援資格。</string>
+    <string name="no_tests">尚無手動測試紀錄。</string>
+    <string name="test_accepted">門禁接受此卡片</string>
+    <string name="test_rejected">門禁未接受此卡片</string>
+    <string name="test_inconclusive">結果尚未確認</string>
+    <string name="delete_test">刪除此紀錄</string>
 </resources>
