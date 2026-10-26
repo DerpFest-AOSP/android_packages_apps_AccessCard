@@ -80,8 +80,7 @@ class AospAccessCardBackend(context: Context) : AccessCardBackend {
         val platform = requireNotNull(state.getByteArray("platform_config"))
         val sak = requireNotNull(state.getByteArray("sel_info"))
         require(bitFrame.size == 1 && platform.size == 1 && sak.size == 1)
-        val identity =
-            CardIdentity(uid, byteArrayOf(platform[0], bitFrame[0]), sak[0].toInt() and 255)
+        val identity = TypeAIdentityCodec.fromController(uid, bitFrame[0], platform[0], sak[0])
         return HardwareState(
             AccessMode.ACTIVE,
             identity,
@@ -101,14 +100,13 @@ class AospAccessCardBackend(context: Context) : AccessCardBackend {
         if (!canApply(identity)) return false
         val nfc = adapter ?: return false
         if (!nfc.isEnabled) return false
-        val atqa = identity.atqa
-        // Match the stock parameter byte order. RATS is untouched for non-ISO-DEP identities.
+        // RATS is untouched for non-ISO-DEP identities.
         val result =
             try {
                 nfc.nfcOemExtension.emulateNfcTechnologyATag(
                     true,
-                    atqa[1],
-                    atqa[0],
+                    TypeAIdentityCodec.bitFrameSdd(identity),
+                    TypeAIdentityCodec.platformConfig(identity),
                     identity.sak.toByte(),
                     identity.uid,
                     0,

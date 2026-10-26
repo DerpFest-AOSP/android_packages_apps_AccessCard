@@ -17,7 +17,11 @@ filegroup {
 
 filegroup {
     name: "accesscard-domain-sources",
-    srcs: ["src/**/domain/*.kt", "src/**/nfc/AccessCardContract.kt"],
+    srcs: [
+        "src/**/domain/*.kt",
+        "src/**/nfc/AccessCardContract.kt",
+        "src/**/nfc/TypeAIdentityCodec.kt",
+    ],
 }
 
 java_defaults {
