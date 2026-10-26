@@ -78,6 +78,7 @@ android_app {
     optimize: { enabled: false },
     static_libs: ["AccessCardUi"],
     jni_libs: ["libaccesscard_diagnostics"],
+    use_embedded_native_libs: true,
 }
 
 cc_library_shared {
