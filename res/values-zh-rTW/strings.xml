@@ -105,9 +105,9 @@
     <string name="theme_dark">深色</string>
     <string name="preferences_saved">偏好設定已儲存。</string>
     <string name="debug_recording">診斷記錄開關</string>
-    <string name="debug_detail">預設關閉，開啟後才會記錄。最多保留最近 24 小時的 512 筆事件（16 KiB）。關閉時刪除 App 內的診斷暫存，不記錄卡片名稱、識別參數或備份密碼。</string>
+    <string name="debug_detail">預設關閉。啟用時請允許系統的日誌存取提示。開啟後會在背景記錄 NFC 系統日誌、RF 事件與服務快照，最多保留 24 小時，約 6 MiB。日誌可能包含卡片識別或 NFC 交易資訊。關閉時停止記錄並刪除 App 內的診斷暫存。</string>
     <string name="diagnostic_size">診斷暫存：%1$d 位元組</string>
-    <string name="export_diagnostics">匯出診斷報告</string>
+    <string name="export_diagnostics">匯出診斷 ZIP</string>
     <string name="clear_diagnostics">清除診斷記錄</string>
     <string name="diagnostics_cleared">診斷記錄已清除。</string>
     <string name="export_complete">匯出完成。</string>
@@ -154,4 +154,12 @@
     <string name="reminder_channel">卡片操作提醒</string>
     <string name="notification_settings">通知設定</string>
     <string name="error_reminder_permission">尚未允許通知，啟用完成提醒維持關閉。</string>
+    <string name="diagnostic_channel">NFC 診斷記錄</string>
+    <string name="diagnostic_notification_title">正在記錄 NFC 診斷</string>
+    <string name="diagnostic_notification_body">點選以匯出測試日誌，或關閉診斷記錄。</string>
+    <string name="capture_starting">正在啟動背景記錄…請等待完成後再測試刷卡。</string>
+    <string name="capture_recording">背景記錄已啟動，可以離開 App 前往測試刷卡。</string>
+    <string name="capture_partial">部分診斷來源無法使用，或背景記錄已停止。匯出會包含可取得的日誌與收集狀態。</string>
+    <string name="capture_off">診斷記錄已關閉。</string>
+    <string name="error_diagnostics">無法變更診斷記錄。請確認已更新完整 ROM，且儲存空間足夠。</string>
 </resources>

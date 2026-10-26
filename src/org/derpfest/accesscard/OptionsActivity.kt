@@ -78,7 +78,9 @@ class OptionsViewModel(application: Application) : AndroidViewModel(application)
     }
 
     fun debug(enabled: Boolean) =
-        perform(R.string.preferences_saved) { wallet.diagnostics.configure(enabled) }
+        perform(R.string.preferences_saved, R.string.error_diagnostics) {
+            wallet.diagnostics.configure(enabled)
+        }
 
     fun theme(choice: ThemeChoice) =
         perform(R.string.preferences_saved) {
@@ -98,11 +100,12 @@ class OptionsViewModel(application: Application) : AndroidViewModel(application)
             try {
                 requireDocument(uri)
                 wallet.refresh().join()
-                val text =
-                    wallet.diagnostics.report(wallet.state.value, wallet.backend.capabilities)
                 getApplication<Application>().contentResolver.openOutputStream(uri, "wt")?.use {
-                    it.write(text.toByteArray(Charsets.UTF_8))
-                    it.flush()
+                    wallet.diagnostics.writeArchive(
+                        it,
+                        wallet.state.value,
+                        wallet.backend.capabilities,
+                    )
                 } ?: throw IOException("Document could not be opened")
             } catch (e: Exception) {
                 deleteCreated(uri)
@@ -228,9 +231,14 @@ class OptionsViewModel(application: Application) : AndroidViewModel(application)
 }
 
 class OptionsActivity : ComponentActivity() {
+    override fun onResume() {
+        super.onResume()
+        model.wallet.diagnostics.ensureRecording()
+    }
+
     private val model by lazy { ViewModelProvider(this)[OptionsViewModel::class.java] }
     private val diagnosticFile =
-        registerForActivityResult(ActivityResultContracts.CreateDocument("text/plain")) {
+        registerForActivityResult(ActivityResultContracts.CreateDocument("application/zip")) {
             it?.let(model::export)
         }
     private val backupFile =
@@ -379,6 +387,17 @@ class OptionsActivity : ComponentActivity() {
                             stringResource(R.string.debug_detail),
                             style = MaterialTheme.typography.bodyMedium,
                         )
+                        val captureState by model.wallet.diagnostics.system.state.collectAsState()
+                        Text(
+                            stringResource(
+                                when (captureState) {
+                                    CaptureState.OFF -> R.string.capture_off
+                                    CaptureState.STARTING -> R.string.capture_starting
+                                    CaptureState.RECORDING -> R.string.capture_recording
+                                    CaptureState.PARTIAL -> R.string.capture_partial
+                                }
+                            )
+                        )
                         Text(
                             stringResource(R.string.diagnostic_size, bytes),
                             style = MaterialTheme.typography.bodySmall,
@@ -386,7 +405,7 @@ class OptionsActivity : ComponentActivity() {
                         Button(
                             {
                                 try {
-                                    diagnosticFile.launch("AccessCard-diagnostics.txt")
+                                    diagnosticFile.launch("AccessCard-diagnostics.zip")
                                 } catch (_: Exception) {
                                     model.message.value = R.string.error_tools
                                 }

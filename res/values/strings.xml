@@ -106,9 +106,9 @@
     <string name="theme_dark">Dark</string>
     <string name="preferences_saved">Preferences saved.</string>
     <string name="debug_recording">Debug recording</string>
-    <string name="debug_detail">Off by default. Records only while enabled: up to 512 events (16 KiB), from the last 24 hours. Turning this off deletes the private diagnostic cache. Card names, identifiers and backup passwords are never recorded.</string>
+    <string name="debug_detail">Off by default. Allow the system log-access prompt when enabling this. While enabled, records NFC system logs, RF events and service snapshots in the background, up to 24 hours and about 6 MiB. Logs may contain card identifiers or NFC transaction information. Turning this off stops recording and deletes the private cache.</string>
     <string name="diagnostic_size">Diagnostic cache: %1$d bytes</string>
-    <string name="export_diagnostics">Export diagnostics</string>
+    <string name="export_diagnostics">Export diagnostic ZIP</string>
     <string name="clear_diagnostics">Clear diagnostic records</string>
     <string name="diagnostics_cleared">Diagnostic records cleared.</string>
     <string name="export_complete">Export completed.</string>
@@ -155,4 +155,12 @@
     <string name="reminder_channel">Card operations</string>
     <string name="notification_settings">Notification settings</string>
     <string name="error_reminder_permission">Notification permission was not granted. Reminders remain off.</string>
+    <string name="diagnostic_channel">NFC diagnostics</string>
+    <string name="diagnostic_notification_title">Recording NFC diagnostics</string>
+    <string name="diagnostic_notification_body">Tap to export the test logs or turn recording off.</string>
+    <string name="capture_starting">Starting background recording… Wait before testing your card.</string>
+    <string name="capture_recording">Background recording is running. You can leave the app and test your card.</string>
+    <string name="capture_partial">Some diagnostic sources are unavailable or recording stopped. Export includes the available logs and collection status.</string>
+    <string name="capture_off">Diagnostic recording is off.</string>
+    <string name="error_diagnostics">Unable to change diagnostic recording. Make sure the complete ROM is up to date and storage is available.</string>
 </resources>

@@ -73,4 +73,22 @@ android_app {
     privapp_allowlist: "privapp-permissions-org.derpfest.accesscard.xml",
     optimize: { enabled: false },
     static_libs: ["AccessCardUi"],
+    jni_libs: ["libaccesscard_diagnostics"],
+}
+
+cc_library_shared {
+    name: "libaccesscard_diagnostics",
+    srcs: ["jni/NfcLogs.cpp"],
+    shared_libs: ["liblog"],
+    header_libs: ["jni_headers"],
+    stl: "libc++_static",
+    system_ext_specific: true,
+    cflags: ["-Wall", "-Wextra", "-Werror"],
+}
+
+cc_test_host {
+    name: "AccessCardNfcLogFilterTests",
+    srcs: ["tests/native/*.cpp"],
+    local_include_dirs: ["jni"],
+    test_suites: ["general-tests"],
 }
