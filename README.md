@@ -23,8 +23,9 @@ Select a DerpFest build target, then run from the source root:
 m AccessCard
 ```
 
-Emulation requires device and controller qualification. Encrypted MIFARE
-Classic sectors are not copied.
+Emulation attempts are allowed by default; device overlays can restrict
+them. Compatible NFC firmware is required. Encrypted MIFARE Classic
+sectors are not copied.
 
 ## License
 

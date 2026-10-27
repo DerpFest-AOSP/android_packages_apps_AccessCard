@@ -1,7 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- 0: not qualified, 1: explicitly enabled for experiments, 2: RF-verified. -->
-    <integer name="config_accesscard_qualification">0</integer>
+    <!-- 0: emulation disabled, 1: allow unverified attempts, 2: RF-verified. -->
+    <!-- Shared defaults allow attempts; devices may restrict them with an overlay. -->
+    <integer name="config_accesscard_qualification">1</integer>
     <!-- API-valid lengths are not a claim of verified controller support. -->
     <integer-array name="config_accesscard_allowed_uid_lengths">
         <item>4</item><item>7</item><item>10</item>
