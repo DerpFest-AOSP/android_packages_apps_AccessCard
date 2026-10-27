@@ -87,10 +87,14 @@ Java_org_derpfest_accesscard_tools_NativeNfcLogs_read(JNIEnv *env, jclass,
       } else {
         read = stream.read(message.buf, LOGGER_ENTRY_MAX_LEN, 50);
       }
-      if (read < 0) {
+      if (accesscard::logReadFailed(read)) {
         result[1] = read;
         stream.close();
         break;
+      }
+      if (read < 0) {
+        ++result[2]; // Truncated packet was consumed; keep this socket open.
+        continue;
       }
       if (read == 0)
         break;

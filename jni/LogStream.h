@@ -8,6 +8,10 @@
 #include <unistd.h>
 
 namespace accesscard {
+// MSG_TRUNC consumes the datagram. Closing the socket and reconnecting from
+// the previous cursor would read that same packet again and stall capture.
+inline bool logReadFailed(int code) { return code < 0 && code != -EMSGSIZE; }
+
 // Keep one approved logd stream open instead of requesting access for every
 // sample.
 class LogStream {

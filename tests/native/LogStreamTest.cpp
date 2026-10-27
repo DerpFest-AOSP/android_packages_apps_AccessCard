@@ -33,6 +33,13 @@ TEST(LogStream, DetectsDisconnectAndExplicitClose) {
   EXPECT_FALSE(stream.connected());
 }
 
+TEST(LogStream, TruncationDoesNotFailTheStream) {
+  EXPECT_FALSE(accesscard::logReadFailed(-EMSGSIZE));
+  EXPECT_FALSE(accesscard::logReadFailed(0));
+  EXPECT_TRUE(accesscard::logReadFailed(-EIO));
+  EXPECT_TRUE(accesscard::logReadFailed(-ECONNRESET));
+}
+
 TEST(LogStream, RejectsTruncatedPackets) {
   int sockets[2];
   ASSERT_EQ(0, socketpair(AF_UNIX, SOCK_SEQPACKET | SOCK_CLOEXEC, 0, sockets));
