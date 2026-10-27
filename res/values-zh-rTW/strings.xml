@@ -99,7 +99,7 @@
     <string name="theme_dark">深色</string>
     <string name="preferences_saved">偏好設定已儲存。</string>
     <string name="debug_recording">診斷記錄開關</string>
-    <string name="debug_detail">預設關閉。啟用時請允許系統的日誌存取提示。開啟後會在背景記錄 NFC 系統日誌、RF 事件與服務快照，最多保留 24 小時，約 6 MiB。日誌可能包含卡片識別或 NFC 交易資訊。關閉時停止記錄並刪除 App 內的診斷暫存。</string>
+    <string name="debug_detail">預設關閉。啟用時請允許系統的日誌存取提示。開啟後會在背景記錄 NFC 系統日誌、RF 事件與服務快照，最多保留 24 小時，約 6 MiB。不會收錄其他應用程式或主機卡模擬的日誌。NFC 行程日誌可能包含卡片識別或 NFC 交易資訊。關閉時停止記錄並刪除 App 內的診斷暫存。</string>
     <string name="diagnostic_size">診斷暫存：%1$d 位元組</string>
     <string name="export_diagnostics">匯出診斷 ZIP</string>
     <string name="clear_diagnostics">清除診斷記錄</string>

@@ -99,9 +99,10 @@ class Diagnostics(private val context: Context, private val preferences: AppPref
                                 "created=${Instant.now()}\n" +
                                 "capture_state=${system.state.value}\n" +
                                 "NFC-related main/system/radio/crash logs only; unrelated apps, kernel and security buffers excluded.\n" +
+                                "Ordinary app tags are ignored. Host-emulation logs are omitted.\n" +
                                 "NFC traces contain RF field/host/EE activity and payload lengths, not APDU content.\n" +
                                 "NFC dumps include routing, discovery and the stack's available native/snoop logs.\n" +
-                                "System logs and dumps may contain card identifiers or NFC transaction information.\n" +
+                                "NFC-process logs and dumps may contain card identifiers or NFC transaction information.\n" +
                                 "Retention: 24 hours; bounded files may rotate. Check capture.properties for wrap/errors.\n" +
                                 "Only events emitted by the installed HAL/firmware can be collected; no RF response is inferred.\n" +
                                 "HOST_DATA: value=technology extra=payload_length; DISCOVERY: value=host_routing extra=rf_enabled.\n")

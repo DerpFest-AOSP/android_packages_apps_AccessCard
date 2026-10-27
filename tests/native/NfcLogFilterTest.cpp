@@ -9,6 +9,8 @@ TEST(NfcLogFilter, IncludesNfcProcessesAndPlatformVendorTags) {
   EXPECT_TRUE(accesscard::isNfcLog(1000, "android.hardware.nfc-service"));
   EXPECT_TRUE(accesscard::isNfcLog(1000, "TmsNciHal"));
   EXPECT_TRUE(accesscard::isNfcLog(10000, "AccessCard"));
+  EXPECT_TRUE(accesscard::isNfcLog(1000, "libnfc-nci"));
+  EXPECT_TRUE(accesscard::isNfcLog(1000, "RoutingManager"));
 }
 
 TEST(NfcLogFilter, ExcludesUnrelatedApplicationAndSystemLogs) {
@@ -17,4 +19,8 @@ TEST(NfcLogFilter, ExcludesUnrelatedApplicationAndSystemLogs) {
   EXPECT_FALSE(accesscard::isNfcLog(10000, "FinancialActivity"));
   EXPECT_FALSE(accesscard::isNfcLog(1000, "ATMS"));
   EXPECT_FALSE(accesscard::isNfcLog(10000, ""));
+  EXPECT_FALSE(accesscard::isNfcLog(1027, "HostEmulationManager"));
+  EXPECT_FALSE(accesscard::isNfcLog(1000, "HostEmulationManager"));
+  EXPECT_FALSE(accesscard::isNfcLog(10000, "NfcService"));
+  EXPECT_FALSE(accesscard::isNfcLog(10000, "nfc-exfil"));
 }
