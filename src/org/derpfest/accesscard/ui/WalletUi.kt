@@ -280,13 +280,18 @@ fun WalletScreen(
     var about by rememberSaveable(selectionSession) { mutableStateOf(false) }
     val cards = state.wallet.cards
     val ids = cards.map { it.id }
-    LaunchedEffect(ids, requestedCard, selectionSession) {
+    LaunchedEffect(ids, requestedCard, selectionSession, state.selectedCardId) {
         if (requestedCard in ids && requestedCard != consumedRequest) {
             selectedId = requestedCard
             consumedRequest = requestedCard
         }
+        if (state.selectedCardId in ids) selectedId = state.selectedCardId
         if (selectedId !in ids)
-            selectedId = state.activeCard?.id ?: state.wallet.defaultId ?: cards.firstOrNull()?.id
+            selectedId =
+                state.selectedCardId?.takeIf { it in ids }
+                    ?: state.activeCard?.id
+                    ?: state.wallet.defaultId
+                    ?: cards.firstOrNull()?.id
     }
     val selected = cards.firstOrNull { it.id == selectedId } ?: cards.firstOrNull()
     val selectCard: (String) -> Unit = { id ->

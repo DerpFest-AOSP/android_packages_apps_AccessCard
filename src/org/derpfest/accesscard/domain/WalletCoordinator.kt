@@ -3,6 +3,7 @@ package org.derpfest.accesscard
 
 import java.io.IOException
 import java.util.UUID
+import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicLong
 import java.util.concurrent.atomic.AtomicReference
 import kotlinx.coroutines.*
@@ -29,8 +30,18 @@ class WalletCoordinator(
     private val operationGate = Mutex()
     private val activationMutex = Mutex()
     private val activationEpoch = AtomicLong(0)
+    private val intentLock = Any()
 
-    private data class Selection(val card: AccessCardProfile, val epoch: Long)
+    private class ForegroundSession(val owner: Any)
+
+    private val foreground = AtomicReference<ForegroundSession?>(null)
+    private val manuallyStopped = AtomicBoolean(false)
+
+    private data class Selection(
+        val card: AccessCardProfile,
+        val epoch: Long,
+        val session: ForegroundSession,
+    )
 
     private val pendingActivation = AtomicReference<Selection?>(null)
     private var readerToken: String? = null
@@ -40,6 +51,72 @@ class WalletCoordinator(
     private var pausedCard: PausedCard? = null
     private val mutable = MutableStateFlow(WalletState())
     val state: StateFlow<WalletState> = mutable.asStateFlow()
+
+    /** Only the top resumed wallet Activity may request a custom identity. */
+    fun enterForeground(owner: Any): Job {
+        val session = ForegroundSession(owner)
+        val epoch =
+            synchronized(intentLock) {
+                foreground.set(session)
+                activationEpoch.get()
+            }
+        return scope.launch {
+            mutex.withLock { refreshLocked() }
+            state.first { !it.busy || foreground.get() !== session }
+            val card =
+                mutex.withLock {
+                    if (foreground.get() !== session || manuallyStopped.get()) return@withLock null
+                    val current = mutable.value
+                    if (current.storageFailed || current.busy) return@withLock null
+                    val cards = current.wallet.cards
+                    cards.firstOrNull { it.id == current.selectedCardId }
+                        ?: current.activeCard
+                        ?: cards.firstOrNull { it.id == current.wallet.defaultId }
+                        ?: cards.firstOrNull()
+                }
+            if (
+                card != null &&
+                    foreground.get() === session &&
+                    backend.canApply(card.identity) &&
+                    state.value.hardware.mode in listOf(AccessMode.IDLE, AccessMode.ACTIVE)
+            ) {
+                val activation =
+                    synchronized(intentLock) {
+                        if (
+                            foreground.get() === session &&
+                                activationEpoch.get() == epoch &&
+                                !manuallyStopped.get()
+                        )
+                            activate(card, session)
+                        else null
+                    }
+                activation?.join()
+            }
+        }
+    }
+
+    fun leaveForeground(owner: Any): Job {
+        synchronized(intentLock) {
+            val session = foreground.get()
+            if (session == null || session.owner !== owner) return scope.launch {}
+            foreground.set(null)
+            cancelSelections()
+        }
+        // Wait for an in-flight apply rather than dropping the only restoration request as BUSY.
+        return perform(
+            Event.STOP,
+            AccessMode.STOPPING,
+            waitForTurn = true,
+            allowReading = true,
+            shouldRun = { foreground.get() == null },
+        ) {
+            val actual = inspect()
+            if (actual.mode == AccessMode.ERROR && !actual.needsRecovery)
+                throw AccessException(actual.failure ?: AccessFailure.SERVICE_UNAVAILABLE)
+            if ((actual.mode == AccessMode.ACTIVE || actual.needsRecovery) && !backend.stop())
+                throw AccessException(inspect().failure ?: AccessFailure.RECOVERY_REQUIRED)
+        }
+    }
 
     fun refresh(notifyTile: Boolean = false) =
         scope.launch {
@@ -114,6 +191,7 @@ class WalletCoordinator(
         event: Event,
         mode: AccessMode,
         waitForTurn: Boolean = false,
+        allowReading: Boolean = false,
         shouldRun: () -> Boolean = { true },
         action: () -> Unit,
     ): Job {
@@ -124,7 +202,7 @@ class WalletCoordinator(
             try {
                 mutex.withLock {
                     if (!shouldRun()) return@withLock
-                    if (readerToken != null) {
+                    if (readerToken != null && !allowReading) {
                         mutable.update { it.copy(message = AccessFailure.BUSY) }
                         emit(event, Outcome.FAILED, AccessFailure.BUSY)
                         return@withLock
@@ -155,8 +233,17 @@ class WalletCoordinator(
         }
     }
 
-    fun activate(card: AccessCardProfile): Job {
-        pendingActivation.set(Selection(card, activationEpoch.get()))
+    fun activate(card: AccessCardProfile): Job =
+        synchronized(intentLock) {
+            val session = foreground.get() ?: return scope.launch {}
+            manuallyStopped.set(false)
+            activate(card, session)
+        }
+
+    private fun activate(card: AccessCardProfile, session: ForegroundSession): Job {
+        if (foreground.get() !== session) return scope.launch {}
+        mutable.update { it.copy(selectedCardId = card.id) }
+        pendingActivation.set(Selection(card, activationEpoch.incrementAndGet(), session))
         return scope.launch {
             activationMutex.withLock {
                 while (true) {
@@ -167,6 +254,7 @@ class WalletCoordinator(
                             waitForTurn = true,
                             shouldRun = {
                                 selection.epoch == activationEpoch.get() &&
+                                    foreground.get() === selection.session &&
                                     pendingActivation.get() == null
                             },
                         ) {
@@ -189,13 +277,17 @@ class WalletCoordinator(
         }
     }
 
-    private fun cancelSelections() {
-        activationEpoch.incrementAndGet()
-        pendingActivation.set(null)
-    }
+    private fun cancelSelections() =
+        synchronized(intentLock) {
+            activationEpoch.incrementAndGet()
+            pendingActivation.set(null)
+        }
 
     fun stop(): Job {
-        cancelSelections()
+        synchronized(intentLock) {
+            manuallyStopped.set(true)
+            cancelSelections()
+        }
         return perform(Event.STOP, AccessMode.STOPPING) {
             val hardware = inspect()
             if (hardware.mode == AccessMode.NFC_OFF) throw AccessException(AccessFailure.NFC_OFF)
@@ -228,48 +320,54 @@ class WalletCoordinator(
         }
     }
 
-    suspend fun beginReading(): String =
-        mutex.withLock {
-            if (readerToken != null || operationGate.isLocked)
-                throw AccessException(AccessFailure.BUSY)
-            val hardware = inspect()
-            // Older modules can still support safe read-only card collection.
-            if (!backend.capabilities.canReadIdentity)
-                throw AccessException(AccessFailure.UNSUPPORTED)
-            when (hardware.mode) {
-                AccessMode.NFC_OFF -> throw AccessException(AccessFailure.NFC_OFF)
-                AccessMode.ERROR ->
-                    throw AccessException(hardware.failure ?: AccessFailure.SERVICE_UNAVAILABLE)
-                AccessMode.READING,
-                AccessMode.APPLYING,
-                AccessMode.STOPPING -> throw AccessException(AccessFailure.BUSY)
-                else -> {}
-            }
-            cancelSelections()
-            pausedCard = null
-            if (hardware.mode == AccessMode.ACTIVE) {
-                emit(Event.STOP, Outcome.STARTED)
-                if (!backend.stop()) {
-                    refreshLocked()
-                    throw AccessException(inspect().failure ?: AccessFailure.RECOVERY_REQUIRED)
+    suspend fun beginReading(): String {
+        cancelSelections()
+        return operationGate.withLock {
+            mutex.withLock {
+                if (readerToken != null) throw AccessException(AccessFailure.BUSY)
+                val hardware = inspect()
+                // Older modules can still support safe read-only card collection.
+                if (!backend.capabilities.canReadIdentity)
+                    throw AccessException(AccessFailure.UNSUPPORTED)
+                when (hardware.mode) {
+                    AccessMode.NFC_OFF -> throw AccessException(AccessFailure.NFC_OFF)
+                    AccessMode.ERROR ->
+                        throw AccessException(hardware.failure ?: AccessFailure.SERVICE_UNAVAILABLE)
+                    AccessMode.READING,
+                    AccessMode.APPLYING,
+                    AccessMode.STOPPING -> throw AccessException(AccessFailure.BUSY)
+                    else -> {}
                 }
-                val stopped = inspect()
-                if (stopped.mode != AccessMode.IDLE || stopped.needsRecovery) {
-                    refreshLocked()
-                    throw AccessException(stopped.failure ?: AccessFailure.RECOVERY_REQUIRED)
+                pausedCard = null
+                if (hardware.mode == AccessMode.ACTIVE) {
+                    emit(Event.STOP, Outcome.STARTED)
+                    if (!backend.stop()) {
+                        refreshLocked()
+                        throw AccessException(inspect().failure ?: AccessFailure.RECOVERY_REQUIRED)
+                    }
+                    val stopped = inspect()
+                    if (stopped.mode != AccessMode.IDLE || stopped.needsRecovery) {
+                        refreshLocked()
+                        throw AccessException(stopped.failure ?: AccessFailure.RECOVERY_REQUIRED)
+                    }
+                    hardware.identity?.let { pausedCard = PausedCard(it, stopped.generation) }
+                    emit(Event.STOP, Outcome.SUCCEEDED, hardware = stopped)
                 }
-                hardware.identity?.let { pausedCard = PausedCard(it, stopped.generation) }
-                emit(Event.STOP, Outcome.SUCCEEDED, hardware = stopped)
-            }
-            UUID.randomUUID().toString().also { token ->
-                readerToken = token
-                emit(Event.READER_OPEN, Outcome.SUCCEEDED)
-                mutable.update {
-                    it.copy(hardware = inspect(), operation = AccessMode.READING, message = null)
+                UUID.randomUUID().toString().also { token ->
+                    readerToken = token
+                    emit(Event.READER_OPEN, Outcome.SUCCEEDED)
+                    mutable.update {
+                        it.copy(
+                            hardware = inspect(),
+                            operation = AccessMode.READING,
+                            message = null,
+                        )
+                    }
+                    changed()
                 }
-                changed()
             }
         }
+    }
 
     suspend fun endReading(token: String) =
         mutex.withLock {
@@ -283,6 +381,8 @@ class WalletCoordinator(
                     // A reset, another owner or an explicit NFC shutdown supersedes this lease.
                     if (
                         previous != null &&
+                            foreground.get() != null &&
+                            !manuallyStopped.get() &&
                             actual.mode == AccessMode.IDLE &&
                             !actual.needsRecovery &&
                             actual.generation == previous.generation

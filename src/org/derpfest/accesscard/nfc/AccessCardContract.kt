@@ -77,6 +77,7 @@ enum class AccessFailure {
         fun fromController(value: String?): AccessFailure? =
             when (value) {
                 "busy" -> BUSY
+                "background" -> BUSY
                 "snapshot_unavailable" -> SNAPSHOT_UNAVAILABLE
                 "config_rejected" -> CONFIG_REJECTED
                 "readback_mismatch" -> READBACK_MISMATCH

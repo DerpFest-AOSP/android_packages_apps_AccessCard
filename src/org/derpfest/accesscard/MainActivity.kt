@@ -8,7 +8,6 @@ import android.graphics.drawable.Icon
 import android.os.Bundle
 import android.provider.Settings
 import android.widget.Toast
-import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
@@ -22,7 +21,7 @@ import org.derpfest.accesscard.ui.WalletScreen
 
 const val EXTRA_SELECTED_CARD = "org.derpfest.accesscard.SELECTED_CARD"
 
-class MainActivity : ComponentActivity() {
+class MainActivity : AccessCardActivity() {
     private val model by lazy { ViewModelProvider(this)[AccessCardViewModel::class.java] }
     private var requestedCard by mutableStateOf<String?>(null)
     private var selectionSession by mutableIntStateOf(0)
@@ -35,7 +34,7 @@ class MainActivity : ComponentActivity() {
             lifecycleScope.launch {
                 model.controller.refresh().join()
                 val restored = model.state.first { state -> !state.busy }
-                requestedCard = restored.activeCard?.id ?: addedCard
+                requestedCard = restored.selectedCardId ?: restored.activeCard?.id ?: addedCard
                 selectionSession++
             }
         }

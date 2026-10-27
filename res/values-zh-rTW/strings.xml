@@ -50,7 +50,7 @@
     <string name="mode_idle_detail">左右滑動即可切換卡片，也可以使用卡片操作按鈕啟用或停用。</string>
     <string name="mode_active">正在使用「%1$s」</string>
     <string name="mode_external">系統正在使用另一組 NFC 識別資訊</string>
-    <string name="mode_active_detail">將手機靠近門禁讀卡器即可感應。使用付款卡片前，請先停用這張卡片。</string>
+    <string name="mode_active_detail">AccessCard 在前景時，將手機靠近門禁讀卡器即可感應。離開 AccessCard 後，會自動恢復系統預設的 NFC 行為，包含付款卡片。</string>
     <string name="mode_unsupported">目前無法使用識別參數模擬</string>
     <string name="mode_unsupported_detail">你仍可在此儲存卡片。此裝置或 NFC 模組不支援識別參數模擬。</string>
     <string name="mode_nfc_off">NFC 已關閉</string>
@@ -107,7 +107,7 @@
     <string name="export_complete">匯出完成。</string>
     <string name="export_location_note">匯出檔案會儲存在您選擇的位置。關閉記錄只會清除 App 內的暫存，不會刪除已匯出的檔案。</string>
     <string name="usage_rules">使用說明</string>
-    <string name="usage_rules_detail">左右滑動即可切換使用的卡片。新增卡片時會暫停模擬，離開後恢復先前的卡片。重新開啟 NFC 或重新開機後，請再次選取卡片。使用付款卡片前，請先停用門禁卡模擬。</string>
+    <string name="usage_rules_detail">AccessCard 僅在前景時使用選取的卡片，包含快速設定的選卡面板。左右滑動即可切換卡片。新增卡片時會暫停模擬，返回後恢復先前的選擇。切換 App、關閉選卡面板或鎖定手機後，會自動恢復系統預設的 NFC 行為。再次開啟 AccessCard 會恢復上次選取的卡片，但不會自動重啟已手動停用的卡片。</string>
     <string name="error_tools">操作未完成，請確認儲存空間後重試。</string>
     <string name="card_notes">卡片備註</string>
     <string name="search_cards">搜尋名稱或備註</string>

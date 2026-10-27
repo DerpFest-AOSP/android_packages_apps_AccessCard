@@ -13,6 +13,8 @@ import org.junit.Test
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class WalletCoordinatorTest {
+    private val foregroundOwner = Any()
+
     private class Storage : CardStore.Storage {
         var bytes: ByteArray? = null
         var failWrite = false
@@ -88,11 +90,181 @@ class WalletCoordinatorTest {
         val owner = CoroutineScope(SupervisorJob() + StandardTestDispatcher(testScheduler))
         val wallet = WalletCoordinator(store, backend, owner)
         try {
+            wallet.enterForeground(foregroundOwner).join()
             block(storage, store, backend, wallet)
         } finally {
             owner.cancel()
         }
     }
+
+    @Test
+    fun leavingForegroundRestoresDefaultNfcAndRejectsBackgroundSelections() =
+        runCase { _, store, backend, wallet ->
+            val card = store.add("Home", identity(), 0, 0)
+            wallet.activate(card).join()
+            wallet.leaveForeground(foregroundOwner).join()
+            wallet.activate(card).join()
+            assertEquals(AccessMode.IDLE, backend.hardware.mode)
+            assertEquals(1, backend.applies)
+            assertEquals(1, backend.stops)
+        }
+
+    @Test
+    fun returningToForegroundRestoresTheLastSelectionInsteadOfTheDefault() =
+        runCase { _, store, backend, wallet ->
+            val default = store.add("Default", identity(), 0, 0)
+            val selected = store.add("Selected", identity(2), 0, 0)
+            store.setDefault(default.id)
+            wallet.activate(selected).join()
+            wallet.leaveForeground(foregroundOwner).join()
+            wallet.enterForeground(foregroundOwner).join()
+            assertEquals(selected.identity, backend.hardware.identity)
+            assertEquals(selected.id, wallet.state.value.selectedCardId)
+        }
+
+    @Test
+    fun openingTheWalletUsesTheDefaultCard() = runCase { _, store, backend, wallet ->
+        store.add("First", identity(), 0, 0)
+        val default = store.add("Default", identity(2), 0, 0)
+        store.setDefault(default.id)
+        wallet.leaveForeground(foregroundOwner).join()
+        wallet.enterForeground(foregroundOwner).join()
+        assertEquals(default.identity, backend.hardware.identity)
+    }
+
+    @Test
+    fun staleActivityPauseCannotStopTheNewForegroundEntry() = runCase { _, store, backend, wallet ->
+        val card = store.add("Home", identity(), 0, 0)
+        wallet.activate(card).join()
+        val panel = Any()
+        wallet.enterForeground(panel).join()
+        wallet.leaveForeground(foregroundOwner).join()
+        assertEquals(AccessMode.ACTIVE, backend.hardware.mode)
+        assertEquals(0, backend.stops)
+        wallet.leaveForeground(panel).join()
+        assertEquals(AccessMode.IDLE, backend.hardware.mode)
+    }
+
+    @Test
+    fun pauseCancelsPendingSelectionsBeforeTheyTouchTheController() =
+        runCase { _, _, backend, wallet ->
+            wallet.activate(profile())
+            wallet.leaveForeground(foregroundOwner).join()
+            advanceUntilIdle()
+            assertEquals(0, backend.applies)
+            assertEquals(AccessMode.IDLE, backend.hardware.mode)
+        }
+
+    @Test
+    fun pauseDuringAnApplyQueuesRestorationInsteadOfDroppingItAsBusy() =
+        runCase { _, _, backend, wallet ->
+            backend.onApply = { wallet.leaveForeground(foregroundOwner) }
+            wallet.activate(profile()).join()
+            advanceUntilIdle()
+            assertEquals(1, backend.applies)
+            assertEquals(1, backend.stops)
+            assertEquals(AccessMode.IDLE, backend.hardware.mode)
+        }
+
+    @Test
+    fun failedForegroundRestoreKeepsTheActualStateAndReportsTheFailure() =
+        runCase { _, _, backend, wallet ->
+            wallet.activate(profile()).join()
+            backend.reject = true
+            wallet.leaveForeground(foregroundOwner).join()
+            assertEquals(AccessMode.ACTIVE, wallet.state.value.hardware.mode)
+            assertEquals(AccessFailure.RECOVERY_REQUIRED, wallet.state.value.message)
+        }
+
+    @Test
+    fun losingTheServiceWhileLeavingForegroundIsNotReportedAsACompletedRestore() =
+        runCase { _, _, backend, wallet ->
+            wallet.activate(profile()).join()
+            backend.serviceLost = true
+            wallet.leaveForeground(foregroundOwner).join()
+            assertEquals(AccessMode.ERROR, wallet.state.value.hardware.mode)
+            assertEquals(AccessFailure.SERVICE_UNAVAILABLE, wallet.state.value.message)
+        }
+
+    @Test
+    fun readerCannotRestoreAnIdentityWhileTheWalletIsInTheBackground() =
+        runCase { _, store, backend, wallet ->
+            val card = store.add("Home", identity(), 0, 0)
+            wallet.activate(card).join()
+            val token = wallet.beginReading()
+            wallet.leaveForeground(foregroundOwner).join()
+            wallet.endReading(token)
+            assertEquals(AccessMode.IDLE, backend.hardware.mode)
+            assertEquals(1, backend.applies)
+            wallet.enterForeground(foregroundOwner).join()
+            assertEquals(card.identity, backend.hardware.identity)
+        }
+
+    @Test
+    fun returningFromReaderWaitsForItsLeaseBeforeRestoringTheSelection() =
+        runCase { _, store, backend, wallet ->
+            val card = store.add("Home", identity(), 0, 0)
+            wallet.activate(card).join()
+            wallet.leaveForeground(foregroundOwner).join()
+            val token = wallet.beginReading()
+            val returning = wallet.enterForeground(foregroundOwner)
+            runCurrent()
+            assertEquals(AccessMode.IDLE, backend.hardware.mode)
+            wallet.endReading(token)
+            returning.join()
+            assertEquals(card.identity, backend.hardware.identity)
+        }
+
+    @Test
+    fun manualStopRemainsStoppedAcrossForegroundChanges() = runCase { _, store, backend, wallet ->
+        val card = store.add("Home", identity(), 0, 0)
+        wallet.activate(card).join()
+        wallet.stop().join()
+        wallet.leaveForeground(foregroundOwner).join()
+        wallet.enterForeground(foregroundOwner).join()
+        assertEquals(AccessMode.IDLE, backend.hardware.mode)
+        assertEquals(1, backend.applies)
+        wallet.activate(card).join()
+        assertEquals(AccessMode.ACTIVE, backend.hardware.mode)
+    }
+
+    @Test
+    fun manualStopDuringReadingCancelsThePreviousIdentityRestore() =
+        runCase { _, _, backend, wallet ->
+            wallet.activate(profile()).join()
+            val token = wallet.beginReading()
+            wallet.stop().join()
+            wallet.endReading(token)
+            assertEquals(AccessMode.IDLE, backend.hardware.mode)
+            assertEquals(1, backend.applies)
+        }
+
+    @Test
+    fun explicitSelectionSupersedesAnAutomaticResumeThatHasNotStarted() =
+        runCase { _, store, backend, wallet ->
+            val first = store.add("First", identity(), 0, 0)
+            val selected = store.add("Selected", identity(2), 0, 0)
+            wallet.activate(first).join()
+            wallet.leaveForeground(foregroundOwner).join()
+            val returning = wallet.enterForeground(foregroundOwner)
+            wallet.activate(selected)
+            advanceUntilIdle()
+            returning.join()
+            assertEquals(selected.identity, backend.hardware.identity)
+        }
+
+    @Test
+    fun manualStopCancelsAnAutomaticResumeThatHasNotStarted() =
+        runCase { _, store, backend, wallet ->
+            val card = store.add("Home", identity(), 0, 0)
+            wallet.activate(card).join()
+            wallet.leaveForeground(foregroundOwner).join()
+            wallet.enterForeground(foregroundOwner)
+            wallet.stop().join()
+            advanceUntilIdle()
+            assertEquals(AccessMode.IDLE, backend.hardware.mode)
+            assertEquals(1, backend.applies)
+        }
 
     @Test
     fun rapidSelectionsApplyOnlyTheLatestCard() = runCase { _, _, backend, wallet ->
@@ -571,6 +743,7 @@ class WalletCoordinatorTest {
                 diagnostics = { _, _, _, _ -> throw IOException("Full diagnostic cache") },
             )
         try {
+            wallet.enterForeground(foregroundOwner).join()
             wallet.activate(profile()).join()
             assertEquals(AccessMode.ACTIVE, wallet.state.value.hardware.mode)
             assertNull(wallet.state.value.message)

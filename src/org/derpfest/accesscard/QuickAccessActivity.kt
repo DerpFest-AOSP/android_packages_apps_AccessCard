@@ -8,8 +8,8 @@ import android.os.Bundle
 import android.provider.Settings
 import android.view.Gravity
 import android.view.WindowManager
-import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.*
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.lifecycleScope
@@ -18,13 +18,17 @@ import org.derpfest.accesscard.nfc.AccessMode
 import org.derpfest.accesscard.tools.AppTheme
 import org.derpfest.accesscard.ui.WalletScreen
 
-class QuickAccessActivity : ComponentActivity() {
+class QuickAccessActivity : AccessCardActivity() {
     private val model by lazy { ViewModelProvider(this)[AccessCardViewModel::class.java] }
     private var polling: Job? = null
     private var entryJob: Job? = null
     private var entering by mutableStateOf(true)
     private var selectionSession by mutableIntStateOf(0)
     private var entryCardId by mutableStateOf<String?>(null)
+    private val reader =
+        registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
+            refreshEntry()
+        }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -40,10 +44,7 @@ class QuickAccessActivity : ComponentActivity() {
                     else state,
                     controller.backend.capabilities,
                     entryCardId,
-                    onAdd = {
-                        startActivity(Intent(this, ReaderActivity::class.java))
-                        finish()
-                    },
+                    onAdd = { reader.launch(Intent(this, ReaderActivity::class.java)) },
                     onActivate = { controller.activate(it) },
                     onStop = { controller.stop() },
                     onUpdate = { controller.update(it) },
@@ -86,6 +87,7 @@ class QuickAccessActivity : ComponentActivity() {
                 val latest = model.state.value
                 entryCardId =
                     latest.activeCard?.id
+                        ?: latest.selectedCardId
                         ?: latest.wallet.defaultId
                         ?: latest.wallet.cards.firstOrNull()?.id
                 selectionSession++

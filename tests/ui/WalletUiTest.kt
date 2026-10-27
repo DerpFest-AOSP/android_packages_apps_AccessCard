@@ -54,11 +54,12 @@ class WalletUiTest {
         quick: Boolean = false,
         session: State<Int>? = null,
         requested: State<String?>? = null,
+        liveState: State<WalletState>? = null,
     ) {
         compose.setContent {
             AccessCardTheme {
                 WalletScreen(
-                    state,
+                    liveState?.value ?: state,
                     capabilities,
                     requested?.value,
                     onAdd = { adds++ },
@@ -89,6 +90,42 @@ class WalletUiTest {
         compose.onNodeWithText(text(R.string.add_card)).performClick()
         assertEquals(1, adds)
         assertNull(activated)
+    }
+
+    private fun verifySharedForegroundSelection(quick: Boolean) {
+        val a = card(1)
+        val b = card(2)
+        val current =
+            mutableStateOf(
+                WalletState(
+                    wallet = WalletSnapshot(listOf(a, b), a.id),
+                    loading = false,
+                    selectedCardId = a.id,
+                )
+            )
+        show(current.value, quick = quick, liveState = current)
+        compose.onNodeWithText(text(R.string.page_indicator, 1, 2)).assertIsDisplayed()
+        compose.runOnIdle {
+            current.value =
+                current.value.copy(
+                    selectedCardId = b.id,
+                    hardware = HardwareState(AccessMode.ACTIVE, b.identity),
+                )
+        }
+        compose.waitForIdle()
+        compose.onNodeWithText(text(R.string.page_indicator, 2, 2)).assertIsDisplayed()
+        compose.onNodeWithText(text(R.string.stop_card)).assertIsEnabled()
+        assertEquals(0, activationCount)
+    }
+
+    @Test
+    fun walletFollowsSelectionChangedFromAnotherEntryWithoutApplyingAgain() {
+        verifySharedForegroundSelection(quick = false)
+    }
+
+    @Test
+    fun quickPickerFollowsSharedForegroundSelectionWithoutApplyingAgain() {
+        verifySharedForegroundSelection(quick = true)
     }
 
     @Test

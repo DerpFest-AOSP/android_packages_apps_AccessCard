@@ -9,7 +9,6 @@ import android.net.Uri
 import android.os.Bundle
 import android.provider.DocumentsContract
 import android.provider.Settings
-import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
@@ -230,7 +229,7 @@ class OptionsViewModel(application: Application) : AndroidViewModel(application)
     }
 }
 
-class OptionsActivity : ComponentActivity() {
+class OptionsActivity : AccessCardActivity() {
     override fun onResume() {
         super.onResume()
         model.wallet.diagnostics.ensureRecording()

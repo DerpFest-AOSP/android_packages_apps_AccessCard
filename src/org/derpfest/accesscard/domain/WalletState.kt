@@ -11,6 +11,7 @@ data class WalletState(
     val operation: AccessMode? = null,
     val storageFailed: Boolean = false,
     val message: AccessFailure? = null,
+    val selectedCardId: String? = null,
 ) {
     val busy
         get() = operation != null || hardware.mode == AccessMode.READING
