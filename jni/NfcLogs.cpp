@@ -94,6 +94,10 @@ Java_org_derpfest_accesscard_tools_NativeNfcLogs_read(JNIEnv *env, jclass,
       }
       if (read < 0) {
         ++result[2]; // Truncated packet was consumed; keep this socket open.
+        if (result[2] >= 8192 || std::chrono::steady_clock::now() >= deadline) {
+          result[1] = 1;
+          break;
+        }
         continue;
       }
       if (read == 0)
