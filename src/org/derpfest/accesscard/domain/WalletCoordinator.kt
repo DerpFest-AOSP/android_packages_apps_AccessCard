@@ -460,6 +460,8 @@ class WalletCoordinator(
                             )
                         emit(Event.APPLY, Outcome.SUCCEEDED, hardware = restored)
                     }
+                } catch (e: CancellationException) {
+                    throw e
                 } catch (e: Exception) {
                     mutable.update { it.copy(message = failure(e)) }
                     emit(Event.APPLY, Outcome.FAILED, failure(e))

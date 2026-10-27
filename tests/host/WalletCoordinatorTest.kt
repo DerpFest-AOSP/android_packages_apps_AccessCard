@@ -586,6 +586,21 @@ class WalletCoordinatorTest {
     }
 
     @Test
+    fun cancellingReaderCleanupIsNotStoredAsAFailedApply() =
+        runCase { _, _, backend, wallet ->
+            wallet.activate(profile()).join()
+            val token = wallet.beginReading()
+            backend.onApply = { throw CancellationException("cancelled") }
+            try {
+                wallet.endReading(token)
+                fail("expected cancellation")
+            } catch (e: CancellationException) {
+                assertEquals("cancelled", e.message)
+            }
+            assertNotEquals(AccessFailure.OPERATION_FAILED, wallet.state.value.message)
+        }
+
+    @Test
     fun staleReaderCannotReleaseNewReaderLease() = runCase { _, _, _, wallet ->
         val old = wallet.beginReading()
         wallet.endReading(old)
