@@ -222,7 +222,10 @@ class WalletCoordinator(
         action: () -> Unit,
     ): Job {
         if (!waitForTurn && !operationGate.tryLock())
-            return scope.launch { emit(event, Outcome.FAILED, AccessFailure.BUSY) }
+            return scope.launch {
+                mutable.update { it.copy(message = AccessFailure.BUSY) }
+                emit(event, Outcome.FAILED, AccessFailure.BUSY)
+            }
         return scope.launch {
             if (waitForTurn) operationGate.lock()
             try {
@@ -353,8 +356,8 @@ class WalletCoordinator(
         perform(Event.REORDER, AccessMode.IDLE) { store.move(id, delta) }
 
     fun delete(card: AccessCardProfile): Job {
-        cancelSelections()
         return perform(Event.DELETE, AccessMode.STOPPING) {
+            cancelSelections()
             val hardware = inspect()
             if (hardware.mode == AccessMode.ERROR || hardware.needsRecovery) {
                 throw AccessException(hardware.failure ?: AccessFailure.SERVICE_UNAVAILABLE)

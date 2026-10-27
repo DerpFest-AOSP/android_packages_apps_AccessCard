@@ -554,6 +554,38 @@ class WalletCoordinatorTest {
     }
 
     @Test
+    fun walletEditReportsBusyWhileAnApplyHoldsTheOperation() = runBlocking {
+        val store = CardStore(Storage())
+        val card = store.add("Home", identity(), 0, 0)
+        val backend = Backend()
+        val started = CompletableDeferred<Unit>()
+        val release = CompletableDeferred<Unit>()
+        var blockApply = false
+        backend.onApply = {
+            if (!blockApply) return@onApply
+            if (!started.isCompleted) started.complete(Unit)
+            runBlocking { release.await() }
+        }
+        val owner = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+        val wallet = WalletCoordinator(store, backend, owner, ResumeStore())
+        try {
+            wallet.enterForeground(foregroundOwner).join()
+            blockApply = true
+            val applying = wallet.activate(card)
+            withTimeout(5_000) { started.await() }
+            wallet.update(card.withNotes("note")).join()
+            assertEquals(AccessFailure.BUSY, wallet.state.value.message)
+            assertEquals("", store.load().cards[0].notes)
+            release.complete(Unit)
+            applying.join()
+            assertEquals(card.identity, backend.hardware.identity)
+        } finally {
+            if (!release.isCompleted) release.complete(Unit)
+            owner.cancel()
+        }
+    }
+
+    @Test
     fun staleReaderCannotReleaseNewReaderLease() = runCase { _, _, _, wallet ->
         val old = wallet.beginReading()
         wallet.endReading(old)
