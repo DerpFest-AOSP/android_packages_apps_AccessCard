@@ -110,4 +110,27 @@ public class SystemDiagnosticStoreTest {
                 s.export(1003 + SystemDiagnosticStore.RETENTION_MS)
                         .containsKey("system/capture.properties"));
     }
+
+    @Test
+    public void oversizedMetadataKeepsCapturedLogs() throws Exception {
+        SystemDiagnosticStore s = store();
+        s.begin(1000);
+        byte[] payload = "log-line\n".getBytes(StandardCharsets.UTF_8);
+        s.batch(2000, payload, payload.length, "ok");
+        s.trace("instance", "9 " + "x".repeat(5000) + "\n");
+        File props = new File(temp.getRoot(), "diag/capture.properties");
+        String properties =
+                new String(java.nio.file.Files.readAllBytes(props.toPath()), StandardCharsets.UTF_8);
+        assertTrue(properties.length() <= SystemDiagnosticStore.METADATA_BYTES);
+        assertFalse(properties.contains("x".repeat(SystemDiagnosticStore.METADATA_VALUE_CHARS + 1)));
+
+        StringBuilder bloated = new StringBuilder();
+        while (bloated.length() <= SystemDiagnosticStore.METADATA_BYTES)
+            bloated.append("trace_status=").append("y".repeat(200)).append('\n');
+        java.nio.file.Files.write(props.toPath(), bloated.toString().getBytes(StandardCharsets.UTF_8));
+        SystemDiagnosticStore reopened = store();
+        reopened.begin(1500);
+        assertTrue(reopened.export(1501).containsKey("system/logcat-0.txt"));
+        assertArrayEquals(payload, reopened.export(1501).get("system/logcat-0.txt"));
+    }
 }

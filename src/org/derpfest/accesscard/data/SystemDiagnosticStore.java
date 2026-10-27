@@ -12,6 +12,9 @@ public final class SystemDiagnosticStore {
     public static final int CHUNKS = 4;
     public static final int SNAPSHOT_BYTES = 1024 * 1024;
     public static final long RETENTION_MS = 24 * 60 * 60 * 1000L;
+    /** Enough for every capped metadata value. Larger files are not a reason to delete logs. */
+    static final int METADATA_BYTES = 32 * 1024;
+    static final int METADATA_VALUE_CHARS = 1024;
     private final File directory;
     private final Properties metadata = new Properties();
     private boolean enabled;
@@ -22,18 +25,27 @@ public final class SystemDiagnosticStore {
 
     public synchronized void begin(long now) throws IOException {
         File state = new File(directory, "capture.properties");
-        if (state.isFile() && state.length() <= 8192) {
+        metadata.clear();
+        boolean metadataLoaded = false;
+        if (state.isFile() && state.length() <= METADATA_BYTES) {
             try (InputStream in = new FileInputStream(state)) {
                 metadata.load(in);
+                metadataLoaded = true;
             } catch (IllegalArgumentException e) {
                 metadata.clear();
             }
         }
         long start = number("start_ms", 0);
-        if (start <= 0 || start > now || now - start > RETENTION_MS) {
+        boolean expired = start <= 0 || start > now || now - start > RETENTION_MS;
+        if (expired && (metadataLoaded || !hasCaptureFiles())) {
             clear();
             metadata.setProperty("start_ms", Long.toString(now));
             metadata.setProperty("cursor_ns", Long.toString(now * 1_000_000));
+        } else if (!metadataLoaded || start <= 0) {
+            // Unreadable metadata must not discard logcat, traces, or snapshots.
+            metadata.setProperty("start_ms", Long.toString(now));
+            metadata.setProperty("cursor_ns", Long.toString(now * 1_000_000));
+            putMeta("metadata_reset", "properties unreadable; logs retained");
         }
         enabled = true;
         Files.createDirectories(directory.toPath());
@@ -55,15 +67,16 @@ public final class SystemDiagnosticStore {
         if (length < 0 || length > bytes.length) throw new IllegalArgumentException();
         append("logcat", bytes, length);
         metadata.setProperty("cursor_ns", Long.toString(cursor));
-        metadata.setProperty("logd_status", status);
+        putMeta("logd_status", status);
         metadata.setProperty("last_poll_ms", Long.toString(System.currentTimeMillis()));
         save();
     }
 
     public synchronized void trace(String instance, String text) throws IOException {
         if (!enabled) return;
+        String instanceKey = cap(instance);
         long previous =
-                instance.equals(metadata.getProperty("trace_instance"))
+                instanceKey.equals(metadata.getProperty("trace_instance"))
                         ? number("trace_sequence", 0)
                         : 0;
         long latest = previous;
@@ -105,9 +118,9 @@ public final class SystemDiagnosticStore {
         }
         byte[] bytes = output.toString().getBytes(StandardCharsets.UTF_8);
         append("rf-events", bytes, bytes.length);
-        metadata.setProperty("trace_instance", instance);
+        putMeta("trace_instance", instanceKey);
         metadata.setProperty("trace_sequence", Long.toString(latest));
-        metadata.setProperty("trace_status", text.lines().findFirst().orElse("unavailable"));
+        putMeta("trace_status", text.lines().findFirst().orElse("unavailable"));
         save();
     }
 
@@ -121,8 +134,8 @@ public final class SystemDiagnosticStore {
                                 "last_logd_error",
                                 "last_trace_error")
                         .contains(key)
-                || value.length() > 1024) throw new IllegalArgumentException();
-        metadata.setProperty(key, value);
+                || value.length() > METADATA_VALUE_CHARS) throw new IllegalArgumentException();
+        putMeta(key, value);
         save();
     }
 
@@ -194,6 +207,25 @@ public final class SystemDiagnosticStore {
             offset += count;
         }
         metadata.setProperty(prefix + "_chunk", Integer.toString(index));
+    }
+
+    private boolean hasCaptureFiles() {
+        File[] files = directory.listFiles();
+        if (files == null) return false;
+        for (File file : files) {
+            String name = file.getName();
+            if (name.startsWith("logcat-") || name.startsWith("rf-events-") || name.startsWith("nfc-"))
+                return true;
+        }
+        return false;
+    }
+
+    private static String cap(String value) {
+        return value.length() > METADATA_VALUE_CHARS ? value.substring(0, METADATA_VALUE_CHARS) : value;
+    }
+
+    private void putMeta(String key, String value) {
+        metadata.setProperty(key, cap(value));
     }
 
     private long number(String key, long fallback) {
