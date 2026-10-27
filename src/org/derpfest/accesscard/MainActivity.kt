@@ -16,6 +16,7 @@ import androidx.compose.runtime.*
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.*
+import kotlinx.coroutines.flow.first
 import org.derpfest.accesscard.tools.AppTheme
 import org.derpfest.accesscard.ui.WalletScreen
 
@@ -24,12 +25,19 @@ const val EXTRA_SELECTED_CARD = "org.derpfest.accesscard.SELECTED_CARD"
 class MainActivity : ComponentActivity() {
     private val model by lazy { ViewModelProvider(this)[AccessCardViewModel::class.java] }
     private var requestedCard by mutableStateOf<String?>(null)
+    private var selectionSession by mutableIntStateOf(0)
     private var polling: Job? = null
     private val reader =
         registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
-            if (it.resultCode == RESULT_OK)
-                requestedCard = it.data?.getStringExtra(EXTRA_SELECTED_CARD)
-            model.controller.refresh()
+            val addedCard =
+                if (it.resultCode == RESULT_OK) it.data?.getStringExtra(EXTRA_SELECTED_CARD)
+                else null
+            lifecycleScope.launch {
+                model.controller.refresh().join()
+                val restored = model.state.first { state -> !state.busy }
+                requestedCard = restored.activeCard?.id ?: addedCard
+                selectionSession++
+            }
         }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -56,6 +64,7 @@ class MainActivity : ComponentActivity() {
                     onRefresh = { controller.refresh() },
                     onClearMessage = controller::clearMessage,
                     onPreferences = { startActivity(Intent(this, OptionsActivity::class.java)) },
+                    selectionSession = selectionSession,
                 )
             }
         }

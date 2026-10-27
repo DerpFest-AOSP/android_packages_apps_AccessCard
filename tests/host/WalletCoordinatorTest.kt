@@ -40,6 +40,7 @@ class WalletCoordinatorTest {
         var stops = 0
         var reject = false
         var serviceLost = false
+        var onApply: (CardIdentity) -> Unit = {}
 
         override fun inspect(): HardwareState {
             if (serviceLost) throw IllegalStateException("Test service death")
@@ -51,11 +52,13 @@ class WalletCoordinatorTest {
 
         override fun apply(identity: CardIdentity): Boolean {
             applies++
+            onApply(identity)
             if (reject) {
                 hardware = hardware.copy(failure = AccessFailure.TIMEOUT)
                 return false
             }
-            hardware = HardwareState(AccessMode.ACTIVE, identity)
+            hardware =
+                HardwareState(AccessMode.ACTIVE, identity, generation = hardware.generation + 1)
             return true
         }
 
@@ -65,7 +68,7 @@ class WalletCoordinatorTest {
                 hardware = hardware.copy(failure = AccessFailure.RECOVERY_REQUIRED)
                 return false
             }
-            hardware = HardwareState(AccessMode.IDLE)
+            hardware = HardwareState(AccessMode.IDLE, generation = hardware.generation + 1)
             return true
         }
     }
@@ -92,14 +95,60 @@ class WalletCoordinatorTest {
     }
 
     @Test
-    fun rapidTapsCannotQueueSeveralActivations() = runCase { _, _, backend, wallet ->
+    fun rapidSelectionsApplyOnlyTheLatestCard() = runCase { _, _, backend, wallet ->
         val card = profile()
+        val last = profile(2)
         wallet.activate(card)
-        wallet.activate(profile(2))
+        wallet.activate(last)
         advanceUntilIdle()
         assertEquals(1, backend.applies)
-        assertEquals(card.identity, wallet.state.value.hardware.identity)
+        assertEquals(last.identity, wallet.state.value.hardware.identity)
     }
+
+    @Test
+    fun selectingOriginalCardDuringAChangeRestoresLatestIntent() =
+        runCase { _, _, backend, wallet ->
+            val original = profile()
+            val next = profile(2)
+            wallet.activate(original).join()
+            backend.onApply = { identity ->
+                if (identity == next.identity) wallet.activate(original)
+            }
+            wallet.activate(next).join()
+            advanceUntilIdle()
+            assertEquals(original.identity, wallet.state.value.hardware.identity)
+            assertEquals(3, backend.applies)
+        }
+
+    @Test
+    fun reselectingAnActiveCardDoesNotRewriteController() = runCase { _, _, backend, wallet ->
+        val card = profile()
+        wallet.activate(card).join()
+        wallet.activate(card).join()
+        assertEquals(1, backend.applies)
+    }
+
+    @Test
+    fun explicitStopCancelsSelectionsThatHaveNotStarted() = runCase { _, _, backend, wallet ->
+        wallet.activate(profile())
+        wallet.stop().join()
+        advanceUntilIdle()
+        assertEquals(0, backend.applies)
+        assertEquals(AccessMode.IDLE, wallet.state.value.mode)
+    }
+
+    @Test
+    fun selectionWaitsForStorageAndKeepsOnlyTheLatestTarget() =
+        runCase { _, store, backend, wallet ->
+            val card = store.add("Original", identity(), 0, 0)
+            wallet.update(card.withAppearance("Renamed", card.color, card.icon))
+            wallet.activate(profile(2))
+            wallet.activate(profile(3))
+            advanceUntilIdle()
+            assertEquals("Renamed", store.load().cards.single().name)
+            assertEquals(identity(3), wallet.state.value.hardware.identity)
+            assertEquals(1, backend.applies)
+        }
 
     @Test
     fun changingDefaultNeverWritesController() = runCase { _, store, backend, wallet ->
@@ -170,16 +219,113 @@ class WalletCoordinatorTest {
     }
 
     @Test
-    fun activeCardNeedsExplicitStopBeforeReading() = runCase { _, _, backend, wallet ->
-        wallet.activate(profile()).join()
+    fun readingAutomaticallyPausesAndRestoresThePreviousIdentity() =
+        runCase { _, _, backend, wallet ->
+            val card = profile()
+            wallet.activate(card).join()
+            val token = wallet.beginReading()
+            assertEquals(1, backend.stops)
+            assertEquals(AccessMode.IDLE, backend.hardware.mode)
+            assertEquals(AccessMode.READING, wallet.state.value.mode)
+            wallet.endReading(token)
+            assertEquals(card.identity, wallet.state.value.hardware.identity)
+            assertEquals(AccessMode.ACTIVE, wallet.state.value.mode)
+            assertEquals(2, backend.applies)
+        }
+
+    @Test
+    fun failedPauseNeverEnablesReadingOrLosesActiveCard() = runCase { _, _, backend, wallet ->
+        val card = profile()
+        wallet.activate(card).join()
+        backend.reject = true
         try {
             wallet.beginReading()
-            fail("Active card must be stopped")
+            fail("Failed pause must not start a reader")
         } catch (e: AccessException) {
-            assertEquals(AccessFailure.NEEDS_STOP, e.failure)
+            assertEquals(AccessFailure.RECOVERY_REQUIRED, e.failure)
         }
-        assertEquals(0, backend.stops)
+        assertEquals(card.identity, backend.hardware.identity)
+        assertFalse(wallet.state.value.busy)
     }
+
+    @Test
+    fun readerDoesNotUndoAnExplicitNfcShutdown() = runCase { _, _, backend, wallet ->
+        wallet.activate(profile()).join()
+        val token = wallet.beginReading()
+        backend.hardware =
+            HardwareState(AccessMode.NFC_OFF, generation = backend.hardware.generation + 1)
+        wallet.endReading(token)
+        assertEquals(1, backend.applies)
+        assertEquals(AccessMode.NFC_OFF, wallet.state.value.mode)
+    }
+
+    @Test
+    fun readerDoesNotOverwriteAResetOrAnotherSession() = runCase { _, _, backend, wallet ->
+        wallet.activate(profile()).join()
+        val token = wallet.beginReading()
+        backend.hardware =
+            HardwareState(AccessMode.IDLE, generation = backend.hardware.generation + 1)
+        wallet.endReading(token)
+        assertEquals(1, backend.applies)
+        assertEquals(AccessMode.IDLE, wallet.state.value.mode)
+    }
+
+    @Test
+    fun failedResumeDoesNotClaimPreviousCardIsActive() = runCase { _, _, backend, wallet ->
+        wallet.activate(profile()).join()
+        val token = wallet.beginReading()
+        backend.reject = true
+        wallet.endReading(token)
+        assertEquals(AccessMode.IDLE, wallet.state.value.hardware.mode)
+        assertNull(wallet.state.value.hardware.identity)
+        assertEquals(AccessFailure.TIMEOUT, wallet.state.value.message)
+        assertFalse(wallet.state.value.busy)
+    }
+
+    @Test
+    fun cardStaysPausedWhileNamingAndSavingAndResumesOnExit() =
+        runCase { _, store, backend, wallet ->
+            val original = store.add("Original", identity(), 0, 0)
+            wallet.activate(original).join()
+            val session = ReaderSession(wallet, this, defaultName = { "Card $it" })
+            session.resume().join()
+            session
+                .onTag(
+                    session.state.value.token!!,
+                    object : IdentityReader {
+                        override fun read() = identity(2)
+
+                        override fun close() {}
+                    },
+                )
+                .join()
+            advanceUntilIdle()
+            assertEquals(ReaderPhase.FOUND, session.state.value.phase)
+            assertEquals(AccessMode.IDLE, backend.hardware.mode)
+            assertTrue(wallet.state.value.busy)
+            session.save().join()
+            assertEquals(ReaderPhase.SAVED, session.state.value.phase)
+            assertEquals(2, store.load().cards.size)
+            assertEquals(AccessMode.IDLE, backend.hardware.mode)
+            session.pause().join()
+            assertEquals(original.identity, wallet.state.value.hardware.identity)
+            assertFalse(wallet.state.value.busy)
+        }
+
+    @Test
+    fun cancellingReaderResumesPreviousCardAndStaleCloseCannotStopIt() =
+        runCase { _, _, backend, wallet ->
+            val card = profile()
+            wallet.activate(card).join()
+            val session = ReaderSession(wallet, this, defaultName = { "Card $it" })
+            session.resume().join()
+            val token = session.state.value.token!!
+            session.pause().join()
+            wallet.endReading(token)
+            assertEquals(card.identity, wallet.state.value.hardware.identity)
+            assertEquals(2, backend.applies)
+            assertEquals(1, backend.stops)
+        }
 
     @Test
     fun unknownDeviceReadsButCannotEmulate() = runCase { _, _, backend, wallet ->
@@ -222,7 +368,7 @@ class WalletCoordinatorTest {
             .join()
         advanceUntilIdle()
         assertEquals(AccessFailure.TAG_LOST, session.state.value.error)
-        assertFalse(wallet.state.value.busy)
+        assertTrue(wallet.state.value.busy)
         session.resume().join()
         assertEquals(ReaderPhase.WAITING, session.state.value.phase)
         session.pause().join()
@@ -412,12 +558,18 @@ class WalletCoordinatorTest {
         assertEquals(0, backend.applies)
         assertFalse(wallet.state.value.busy)
     }
+
     @Test
     fun diagnosticFailureCannotBreakActivationOrStopping() = runTest {
         val backend = Backend()
         val owner = CoroutineScope(SupervisorJob() + StandardTestDispatcher(testScheduler))
-        val wallet = WalletCoordinator(CardStore(Storage()), backend, owner,
-            diagnostics = { _, _, _, _ -> throw IOException("Full diagnostic cache") })
+        val wallet =
+            WalletCoordinator(
+                CardStore(Storage()),
+                backend,
+                owner,
+                diagnostics = { _, _, _, _ -> throw IOException("Full diagnostic cache") },
+            )
         try {
             wallet.activate(profile()).join()
             assertEquals(AccessMode.ACTIVE, wallet.state.value.hardware.mode)
@@ -425,37 +577,44 @@ class WalletCoordinatorTest {
             wallet.stop().join()
             assertEquals(AccessMode.IDLE, wallet.state.value.hardware.mode)
             assertNull(wallet.state.value.message)
-        } finally { owner.cancel() }
+        } finally {
+            owner.cancel()
+        }
     }
 
     @Test
-    fun importingCardsKeepsActiveHardwareAndExistingDefault() = runCase { _, store, backend, wallet ->
-        val active = store.add("Existing", identity(), 0, 0)
-        wallet.activate(active).join()
-        val incoming = profile(2)
-        val result = wallet.importCards(WalletSnapshot(listOf(incoming), incoming.id)).await()
-        assertEquals(1, result.added)
-        assertEquals(2, wallet.state.value.wallet.cards.size)
-        assertEquals(active.id, wallet.state.value.wallet.defaultId)
-        assertEquals(active.identity, wallet.state.value.hardware.identity)
-        assertEquals(1, backend.applies)
-        assertEquals(0, backend.stops)
-    }
-
-    @Test
-    fun importingDuringReadLeaseIsRejectedWithoutMutatingWallet() = runCase { _, store, backend, wallet ->
-        store.add("Existing", identity(), 0, 0)
-        val token = wallet.beginReading()
-        try {
+    fun importingCardsKeepsActiveHardwareAndExistingDefault() =
+        runCase { _, store, backend, wallet ->
+            val active = store.add("Existing", identity(), 0, 0)
+            wallet.activate(active).join()
             val incoming = profile(2)
-            try {
-                wallet.importCards(WalletSnapshot(listOf(incoming), null)).await()
-                fail("Expected a busy reader lease")
-            } catch (e: AccessException) { assertEquals(AccessFailure.BUSY, e.failure) }
-            assertEquals(1, store.load().cards.size)
-            assertEquals(0, backend.applies)
+            val result = wallet.importCards(WalletSnapshot(listOf(incoming), incoming.id)).await()
+            assertEquals(1, result.added)
+            assertEquals(2, wallet.state.value.wallet.cards.size)
+            assertEquals(active.id, wallet.state.value.wallet.defaultId)
+            assertEquals(active.identity, wallet.state.value.hardware.identity)
+            assertEquals(1, backend.applies)
             assertEquals(0, backend.stops)
-        } finally { wallet.endReading(token) }
-    }
+        }
 
+    @Test
+    fun importingDuringReadLeaseIsRejectedWithoutMutatingWallet() =
+        runCase { _, store, backend, wallet ->
+            store.add("Existing", identity(), 0, 0)
+            val token = wallet.beginReading()
+            try {
+                val incoming = profile(2)
+                try {
+                    wallet.importCards(WalletSnapshot(listOf(incoming), null)).await()
+                    fail("Expected a busy reader lease")
+                } catch (e: AccessException) {
+                    assertEquals(AccessFailure.BUSY, e.failure)
+                }
+                assertEquals(1, store.load().cards.size)
+                assertEquals(0, backend.applies)
+                assertEquals(0, backend.stops)
+            } finally {
+                wallet.endReading(token)
+            }
+        }
 }

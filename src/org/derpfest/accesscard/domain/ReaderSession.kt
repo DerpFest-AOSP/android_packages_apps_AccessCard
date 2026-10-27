@@ -20,7 +20,6 @@ enum class ReaderPhase {
     FOUND,
     SAVING,
     SAVED,
-    NEEDS_STOP,
     ERROR,
 }
 
@@ -93,14 +92,7 @@ class ReaderSession(
                         mutable.update { it.copy(phase = ReaderPhase.WAITING, token = token) }
                     }
                 } catch (e: AccessException) {
-                    mutable.update {
-                        it.copy(
-                            phase =
-                                if (e.failure == AccessFailure.NEEDS_STOP) ReaderPhase.NEEDS_STOP
-                                else ReaderPhase.ERROR,
-                            error = e.failure,
-                        )
-                    }
+                    mutable.update { it.copy(phase = ReaderPhase.ERROR, error = e.failure) }
                 }
             }
         }
@@ -122,12 +114,6 @@ class ReaderSession(
             }
         }
     }
-
-    fun stopAndRead() =
-        scope.launch {
-            wallet.stop().join()
-            if (resumed.get()) resume()
-        }
 
     fun readerFailed(token: String, failure: AccessFailure) =
         scope.launch {
@@ -182,7 +168,8 @@ class ReaderSession(
                             }
                         } finally {
                             runCatching { reader.close() }
-                            withContext(NonCancellable) { wallet.endReading(token) }
+                            // Keep emulation paused while the new card is named and saved.
+                            // Activity pause disables reader mode before releasing this lease.
                         }
                     }
             }

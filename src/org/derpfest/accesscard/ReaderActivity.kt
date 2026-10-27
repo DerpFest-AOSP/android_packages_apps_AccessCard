@@ -28,8 +28,8 @@ import kotlinx.coroutines.flow.*
 import org.derpfest.accesscard.data.DiagnosticStore
 import org.derpfest.accesscard.model.*
 import org.derpfest.accesscard.nfc.*
-import org.derpfest.accesscard.ui.*
 import org.derpfest.accesscard.tools.AppTheme
+import org.derpfest.accesscard.ui.*
 
 class ReaderViewModel(application: Application, initial: ReaderState) :
     AndroidViewModel(application) {
@@ -42,16 +42,25 @@ class ReaderViewModel(application: Application, initial: ReaderState) :
 
     init {
         scope.launch {
-            session.state.map { it.phase to it.error }.distinctUntilChanged().collect { (phase, error) ->
-                val outcome = when (phase) {
-                    ReaderPhase.READING -> DiagnosticStore.Outcome.STARTED
-                    ReaderPhase.FOUND -> DiagnosticStore.Outcome.SUCCEEDED
-                    ReaderPhase.ERROR -> DiagnosticStore.Outcome.FAILED
-                    else -> null
+            session.state
+                .map { it.phase to it.error }
+                .distinctUntilChanged()
+                .collect { (phase, error) ->
+                    val outcome =
+                        when (phase) {
+                            ReaderPhase.READING -> DiagnosticStore.Outcome.STARTED
+                            ReaderPhase.FOUND -> DiagnosticStore.Outcome.SUCCEEDED
+                            ReaderPhase.ERROR -> DiagnosticStore.Outcome.FAILED
+                            else -> null
+                        }
+                    if (outcome != null)
+                        wallet.diagnostics.record(
+                            DiagnosticStore.Event.READ,
+                            outcome,
+                            error,
+                            wallet.state.value.hardware,
+                        )
                 }
-                if (outcome != null) wallet.diagnostics.record(DiagnosticStore.Event.READ,
-                    outcome, error, wallet.state.value.hardware)
-            }
         }
     }
 
@@ -236,7 +245,6 @@ class ReaderActivity : ComponentActivity() {
         val saving = state.phase == ReaderPhase.SAVING
         val reading = state.phase == ReaderPhase.READING
         val preparing = state.phase == ReaderPhase.PREPARING
-        val waitingForStop = state.phase == ReaderPhase.NEEDS_STOP
         val name = state.name
         val color = state.color
         val icon = state.icon
@@ -280,7 +288,10 @@ class ReaderActivity : ComponentActivity() {
                     if (preparing || reading)
                         CircularProgressIndicator(Modifier.align(Alignment.CenterHorizontally))
                     if (error != null)
-                        TextButton({ model.session.resume() }) {
+                        TextButton({
+                            disableReader()
+                            model.session.resume()
+                        }) {
                             Text(stringResource(R.string.try_again))
                         }
                     if (adapter?.isEnabled != true)
@@ -331,19 +342,5 @@ class ReaderActivity : ComponentActivity() {
                 )
             }
         }
-        if (waitingForStop)
-            AlertDialog(
-                onDismissRequest = ::finish,
-                title = { Text(stringResource(R.string.reader_stop_title)) },
-                text = { Text(stringResource(R.string.reader_stop_detail)) },
-                confirmButton = {
-                    TextButton({ model.session.stopAndRead() }) {
-                        Text(stringResource(R.string.stop_and_read))
-                    }
-                },
-                dismissButton = {
-                    TextButton({ finish() }) { Text(stringResource(R.string.cancel)) }
-                },
-            )
     }
 }

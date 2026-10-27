@@ -44,19 +44,28 @@ class WalletUiTest {
         )
 
     private var activated: AccessCardProfile? = null
+    private var activationCount = 0
     private var adds = 0
     private var stops = 0
     private var moved: Pair<String, Int>? = null
 
-    private fun show(state: WalletState, quick: Boolean = false, session: State<Int>? = null) {
+    private fun show(
+        state: WalletState,
+        quick: Boolean = false,
+        session: State<Int>? = null,
+        requested: State<String?>? = null,
+    ) {
         compose.setContent {
             AccessCardTheme {
                 WalletScreen(
                     state,
                     capabilities,
-                    null,
+                    requested?.value,
                     onAdd = { adds++ },
-                    onActivate = { activated = it },
+                    onActivate = {
+                        activated = it
+                        activationCount++
+                    },
                     onStop = { stops++ },
                     onUpdate = {},
                     onDefault = {},
@@ -83,15 +92,13 @@ class WalletUiTest {
     }
 
     @Test
-    fun swipeBrowsesUntilExplicitUse() {
+    fun swipingToACardRequestsActivationWithoutAnotherTap() {
         val a = card(1)
         val b = card(2)
         show(WalletState(wallet = WalletSnapshot(listOf(a, b), a.id), loading = false))
         compose.onNodeWithTag("card_carousel").performTouchInput { swipeLeft() }
         compose.waitForIdle()
-        assertNull(activated)
         compose.onNodeWithText(text(R.string.page_indicator, 2, 2)).assertIsDisplayed()
-        compose.onNodeWithText(text(R.string.use_card)).performClick()
         assertEquals(b.id, activated?.id)
         // The callback alone cannot establish ACTIVE or change the default.
         compose.onNodeWithText(text(R.string.use_card)).assertIsEnabled()
@@ -135,8 +142,59 @@ class WalletUiTest {
         compose.runOnIdle { session.intValue++ }
         compose.onNodeWithText(text(R.string.page_indicator, 1, 2)).assertIsDisplayed()
         compose.onNodeWithText(text(R.string.stop_card)).assertIsEnabled()
-        assertNull(activated)
+        assertEquals(b.id, activated?.id)
+        assertEquals(1, activationCount)
         assertEquals(0, stops)
+    }
+
+    @Test
+    fun swipingBackToOldActiveCardDuringApplyKeepsLatestSelection() {
+        val a = card(1)
+        val b = card(2)
+        show(
+            WalletState(
+                wallet = WalletSnapshot(listOf(a, b), a.id),
+                loading = false,
+                hardware = HardwareState(AccessMode.ACTIVE, a.identity),
+                operation = AccessMode.APPLYING,
+            )
+        )
+        compose.onNodeWithTag("card_carousel").performTouchInput { swipeLeft() }
+        compose.waitForIdle()
+        assertEquals(b.id, activated?.id)
+        compose.onNodeWithTag("card_carousel").performTouchInput { swipeRight() }
+        compose.waitForIdle()
+        assertEquals(a.id, activated?.id)
+        assertEquals(2, activationCount)
+    }
+
+    @Test
+    fun openingAndProgrammaticSelectionDoNotWriteController() {
+        val a = card(1)
+        val b = card(2)
+        val requested = mutableStateOf<String?>(null)
+        show(
+            WalletState(wallet = WalletSnapshot(listOf(a, b), a.id), loading = false),
+            requested = requested,
+        )
+        compose.waitForIdle()
+        assertNull(activated)
+        compose.runOnIdle { requested.value = b.id }
+        compose.onNodeWithText(text(R.string.page_indicator, 2, 2)).assertIsDisplayed()
+        assertNull(activated)
+    }
+
+    @Test
+    fun choosingFromAllCardsRequestsActivation() {
+        val a = card(1)
+        val b = card(2)
+        show(WalletState(wallet = WalletSnapshot(listOf(a, b), a.id), loading = false))
+        compose.onNodeWithText(text(R.string.all_cards)).performClick()
+        compose.onNodeWithTag("card_list_row_${b.id}").performClick()
+        compose.waitForIdle()
+        assertEquals(b.id, activated?.id)
+        assertEquals(1, activationCount)
+        compose.onNodeWithText(text(R.string.active_badge)).assertDoesNotExist()
     }
 
     @Test
@@ -205,6 +263,7 @@ class WalletUiTest {
         compose.onNodeWithText(text(R.string.all_cards)).performClick()
         compose.onAllNodesWithText(a.name).onLast().assertIsDisplayed()
     }
+
     @Test
     fun searchFindsNotesWithoutActivatingAndReorderingClearsFilter() {
         val a = card(1, "Home")
@@ -238,10 +297,16 @@ class WalletUiTest {
         var password: CharArray? = null
         compose.setContent { AccessCardTheme { BackupPasswordDialog(true, {}, { password = it }) } }
         compose.onNodeWithText(text(R.string.continue_action)).assertIsNotEnabled()
-        compose.onNodeWithText(text(R.string.backup_password)).performTextInput("long enough password")
-        compose.onNodeWithText(text(R.string.confirm_password)).performTextInput("different password")
+        compose
+            .onNodeWithText(text(R.string.backup_password))
+            .performTextInput("long enough password")
+        compose
+            .onNodeWithText(text(R.string.confirm_password))
+            .performTextInput("different password")
         compose.onNodeWithText(text(R.string.continue_action)).assertIsNotEnabled()
-        compose.onNodeWithText(text(R.string.confirm_password)).performTextReplacement("long enough password")
+        compose
+            .onNodeWithText(text(R.string.confirm_password))
+            .performTextReplacement("long enough password")
         compose.onNodeWithText(text(R.string.continue_action)).performClick()
         assertArrayEquals("long enough password".toCharArray(), password)
         password?.fill('\u0000')
@@ -250,9 +315,10 @@ class WalletUiTest {
     @Test
     fun importReviewDoesNotConfirmWhileBusy() {
         var confirms = 0
-        compose.setContent { AccessCardTheme { ImportReviewDialog(2, true, false, {}, { confirms++ }) } }
+        compose.setContent {
+            AccessCardTheme { ImportReviewDialog(2, true, false, {}, { confirms++ }) }
+        }
         compose.onNodeWithText(text(R.string.import_confirm)).assertIsNotEnabled()
         assertEquals(0, confirms)
     }
-
 }

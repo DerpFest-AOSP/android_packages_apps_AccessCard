@@ -27,7 +27,7 @@
     <string name="card_details">卡片詳情</string>
     <string name="technical_details">識別資訊</string>
     <string name="identity_note">這是 NFC 識別資訊，不是加密卡片內容的完整副本。</string>
-    <string name="use_card">使用這張卡</string>
+    <string name="use_card">啟用卡片</string>
     <string name="stop_card">停用卡片</string>
     <string name="default_card">預設卡片</string>
     <string name="set_default">設為預設卡片</string>
@@ -45,17 +45,14 @@
     <string name="add_tile">加入快速設定</string>
     <string name="tile_added">AccessCard 已加入快速設定。</string>
     <string name="about">關於 AccessCard</string>
-    <string name="about_body">在手機上管理 NFC 門禁卡識別資訊，不需要帳號或網路。識別參數模擬不包含加密扇區複製，也不保證每個門禁讀卡器都能接受。</string>
-    <string name="experimental">此裝置的功能仍在驗證中</string>
-    <string name="verified_lengths">已完成 RF 驗證的 UID 長度：%1$s</string>
-    <string name="no_verified_lengths">此裝置尚無完成 RF 驗證的 UID 長度。</string>
+    <string name="about_body">在手機中管理 NFC 門禁卡，透過 App 或快速設定切換使用。不需要帳號或網路連線。</string>
     <string name="mode_idle">隨時準備就緒</string>
-    <string name="mode_idle_detail">選擇卡片，再點選「使用這張卡」。</string>
+    <string name="mode_idle_detail">左右滑動即可切換卡片，也可以使用卡片操作按鈕啟用或停用。</string>
     <string name="mode_active">正在使用「%1$s」</string>
     <string name="mode_external">系統正在使用另一組 NFC 識別資訊</string>
-    <string name="mode_active_detail">識別參數已套用。使用付款卡片前請先停用門禁卡；實際門禁接受狀況需另外確認。</string>
+    <string name="mode_active_detail">將手機靠近門禁讀卡器即可感應。使用付款卡片前，請先停用這張卡片。</string>
     <string name="mode_unsupported">目前無法使用識別參數模擬</string>
-    <string name="mode_unsupported_detail">仍可在這裡保存卡片。目前的裝置或 NFC 模組尚未具備可用的模擬設定。</string>
+    <string name="mode_unsupported_detail">你仍可在此儲存卡片。此裝置或 NFC 模組不支援識別參數模擬。</string>
     <string name="mode_nfc_off">NFC 已關閉</string>
     <string name="mode_nfc_off_detail">開啟 NFC 後，即可讀取或使用卡片。</string>
     <string name="mode_applying">正在準備卡片…</string>
@@ -69,10 +66,7 @@
     <string name="reader_title">將卡片靠近手機</string>
     <string name="reader_hint">將卡片靠近手機背面的 NFC 感應區，並保持不動，直到讀取完成。</string>
     <string name="reader_found">認識你的新卡片。</string>
-    <string name="reader_found_detail">替卡片取個名稱、挑選外觀。儲存後不會自動啟用。</string>
-    <string name="reader_stop_title">先停用目前卡片嗎？</string>
-    <string name="reader_stop_detail">讀取新卡片前需要先停用模擬。讀取結束後，原本卡片不會自動重新啟用。</string>
-    <string name="stop_and_read">停用並開始讀卡</string>
+    <string name="reader_found_detail">設定卡片名稱與外觀。離開此畫面時，會恢復先前使用的卡片。</string>
     <string name="try_again">再試一次</string>
     <string name="error_read">未能讀取卡片，請靠近感應區後再試一次。</string>
     <string name="error_tag_type">這張卡片未提供可用的 NFC-A 識別資訊。</string>
@@ -113,7 +107,7 @@
     <string name="export_complete">匯出完成。</string>
     <string name="export_location_note">匯出檔案會儲存在您選擇的位置。關閉記錄只會清除 App 內的暫存，不會刪除已匯出的檔案。</string>
     <string name="usage_rules">使用說明</string>
-    <string name="usage_rules_detail">請明確操作使用或停用卡片。重啟 NFC 或手機後不會自動啟用已儲存卡片，付款前請先停用門禁卡。熄屏與鎖定時的刷卡行為仍需各裝置實測，不保證支援熄屏刷卡。</string>
+    <string name="usage_rules_detail">左右滑動即可切換使用的卡片。新增卡片時會暫停模擬，離開後恢復先前的卡片。重新開啟 NFC 或重新開機後，請再次選取卡片。使用付款卡片前，請先停用門禁卡模擬。</string>
     <string name="error_tools">操作未完成，請確認儲存空間後重試。</string>
     <string name="card_notes">卡片備註</string>
     <string name="search_cards">搜尋名稱或備註</string>
@@ -122,7 +116,7 @@
     <string name="test_history">手動測試紀錄</string>
     <string name="test_location">讀卡器或測試位置</string>
     <string name="test_note">測試備註</string>
-    <string name="manual_test_note">由使用者手動填寫，不是裝置認證結果。每張卡最多保留最近 20 筆，不會改變硬體支援資格。</string>
+    <string name="manual_test_note">自行記錄讀卡器測試結果，每張卡片保留最近 20 筆紀錄。</string>
     <string name="no_tests">尚無手動測試紀錄。</string>
     <string name="test_accepted">門禁接受此卡片</string>
     <string name="test_rejected">門禁未接受此卡片</string>
@@ -162,4 +156,5 @@
     <string name="capture_partial">部分診斷來源無法使用，或背景記錄已停止。匯出會包含可取得的日誌與收集狀態。</string>
     <string name="capture_off">診斷記錄已關閉。</string>
     <string name="error_diagnostics">無法變更診斷記錄。請確認已更新完整 ROM，且儲存空間足夠。</string>
+    <string name="reader_feedback_detail">短震動表示偵測到讀卡器感應場；長震動表示 NFC 通訊或控制器發生錯誤。感應到讀卡器不代表門禁已放行。</string>
 </resources>

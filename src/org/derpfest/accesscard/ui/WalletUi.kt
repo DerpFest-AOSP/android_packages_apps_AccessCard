@@ -191,7 +191,6 @@ fun CardFace(
 @Composable
 fun HardwareStatus(
     state: WalletState,
-    qualification: Qualification,
     onNfcSettings: () -> Unit,
     onRefresh: () -> Unit,
     modifier: Modifier = Modifier,
@@ -243,13 +242,6 @@ fun HardwareStatus(
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            if (qualification == Qualification.EXPERIMENTAL) {
-                Text(
-                    stringResource(R.string.experimental),
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.primary,
-                )
-            }
             if (mode == AccessMode.NFC_OFF || state.hardware.needsRecovery) {
                 TextButton(onNfcSettings) { Text(stringResource(R.string.nfc_settings)) }
             } else if (mode == AccessMode.ERROR) {
@@ -297,6 +289,26 @@ fun WalletScreen(
             selectedId = state.activeCard?.id ?: state.wallet.defaultId ?: cards.firstOrNull()?.id
     }
     val selected = cards.firstOrNull { it.id == selectedId } ?: cards.firstOrNull()
+    val selectCard: (String) -> Unit = { id ->
+        selectedId = id
+        cards
+            .firstOrNull { it.id == id }
+            ?.let { card ->
+                if (
+                    !state.storageFailed &&
+                        capabilities.canApplyIdentity &&
+                        card.identity.isLegacyTypeA &&
+                        card.identity.uid.size in capabilities.allowedUidLengths &&
+                        state.hardware.mode in listOf(AccessMode.IDLE, AccessMode.ACTIVE) &&
+                        (!state.busy || state.operation == AccessMode.APPLYING) &&
+                        (state.busy ||
+                            !(state.hardware.mode == AccessMode.ACTIVE &&
+                                state.hardware.identity == card.identity))
+                ) {
+                    onActivate(card)
+                }
+            }
+    }
     val scroll = rememberScrollState()
     Surface(
         shape =
@@ -339,9 +351,10 @@ fun WalletScreen(
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                 }
-                if (!quick) IconButton(onPreferences) {
-                    Glyph(R.drawable.ic_settings, stringResource(R.string.preferences))
-                }
+                if (!quick)
+                    IconButton(onPreferences) {
+                        Glyph(R.drawable.ic_settings, stringResource(R.string.preferences))
+                    }
                 IconButton(onClick = { if (quick) onClose() else about = true }) {
                     Glyph(
                         if (quick) R.drawable.ic_close else R.drawable.ic_info,
@@ -362,14 +375,7 @@ fun WalletScreen(
                 EmptyWallet(onAdd, !state.storageFailed && capabilities.canReadIdentity)
             } else {
                 if (quick) Spacer(Modifier.height(4.dp))
-                CardCarousel(
-                    cards,
-                    selected?.id,
-                    state,
-                    { selectedId = it },
-                    { detailId = it },
-                    quick,
-                )
+                CardCarousel(cards, selected?.id, state, selectCard, { detailId = it }, quick)
                 Row(
                     Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 6.dp),
                     verticalAlignment = Alignment.CenterVertically,
@@ -424,13 +430,7 @@ fun WalletScreen(
                 }
             }
             Spacer(Modifier.height(16.dp))
-            HardwareStatus(
-                state,
-                capabilities.qualification,
-                onNfcSettings,
-                onRefresh,
-                Modifier.padding(horizontal = 24.dp),
-            )
+            HardwareStatus(state, onNfcSettings, onRefresh, Modifier.padding(horizontal = 24.dp))
             if (state.hardware.needsRecovery) {
                 TextButton(
                     onStop,
@@ -498,7 +498,7 @@ fun WalletScreen(
             selected?.id,
             { showAll = false },
             {
-                selectedId = it
+                selectCard(it)
                 showAll = false
             },
             onMove,
@@ -530,13 +530,7 @@ fun WalletScreen(
                     style = MaterialTheme.typography.bodyLarge,
                 )
                 Text(
-                    if (capabilities.verifiedUidLengths.isEmpty())
-                        stringResource(R.string.no_verified_lengths)
-                    else
-                        stringResource(
-                            R.string.verified_lengths,
-                            capabilities.verifiedUidLengths.sorted().joinToString(),
-                        ),
+                    stringResource(R.string.reader_feedback_detail),
                     style = MaterialTheme.typography.bodyMedium,
                 )
                 Spacer(Modifier.height(24.dp))
@@ -556,6 +550,8 @@ private fun CardCarousel(
     val ids = cards.map { it.id }
     val initial = cards.indexOfFirst { it.id == selectedId }.coerceAtLeast(0)
     val pager = rememberPagerState(initialPage = initial, pageCount = { cards.size })
+    val currentOnSelect by rememberUpdatedState(onSelect)
+    val currentSelectedId by rememberUpdatedState(selectedId)
     LaunchedEffect(selectedId, ids) {
         val index = cards.indexOfFirst { it.id == selectedId }
         if (index >= 0 && (index != pager.currentPage || pager.isScrollInProgress))
@@ -567,10 +563,16 @@ private fun CardCarousel(
             .drop(1)
             .filter { !it.second }
             .distinctUntilChanged()
-            .collect { (index, _) -> cards.getOrNull(index)?.let { onSelect(it.id) } }
+            .collect { (index, _) ->
+                cards
+                    .getOrNull(index)
+                    ?.takeIf { it.id != currentSelectedId }
+                    ?.let { currentOnSelect(it.id) }
+            }
     }
     HorizontalPager(
         state = pager,
+        userScrollEnabled = !state.busy || state.operation == AccessMode.APPLYING,
         contentPadding = PaddingValues(horizontal = 24.dp),
         pageSpacing = 14.dp,
         key = { cards[it].id },
@@ -637,9 +639,13 @@ private fun AllCardsSheet(
 ) {
     var editing by rememberSaveable { mutableStateOf(false) }
     var query by rememberSaveable { mutableStateOf("") }
-    val visibleCards = if (editing) state.wallet.cards else state.wallet.cards.filter {
-        it.name.contains(query.trim(), ignoreCase = true) || it.notes.contains(query.trim(), ignoreCase = true)
-    }
+    val visibleCards =
+        if (editing) state.wallet.cards
+        else
+            state.wallet.cards.filter {
+                it.name.contains(query.trim(), ignoreCase = true) ||
+                    it.notes.contains(query.trim(), ignoreCase = true)
+            }
     ModalBottomSheet(onClose) {
         Row(
             Modifier.fillMaxWidth().padding(horizontal = 24.dp),
@@ -650,14 +656,26 @@ private fun AllCardsSheet(
                 Modifier.weight(1f),
                 style = MaterialTheme.typography.headlineSmall,
             )
-            TextButton({ editing = !editing; query = "" }) {
+            TextButton({
+                editing = !editing
+                query = ""
+            }) {
                 Text(stringResource(if (editing) R.string.done else R.string.edit_order))
             }
         }
-        OutlinedTextField(query, { query = it.take(128) }, enabled = !editing,
-            label = { Text(stringResource(R.string.search_cards)) }, singleLine = true,
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 8.dp).testTag("card_search"))
-        if (visibleCards.isEmpty()) Text(stringResource(R.string.no_search_results), Modifier.padding(24.dp))
+        OutlinedTextField(
+            query,
+            { query = it.take(128) },
+            enabled = !editing,
+            label = { Text(stringResource(R.string.search_cards)) },
+            singleLine = true,
+            modifier =
+                Modifier.fillMaxWidth()
+                    .padding(horizontal = 24.dp, vertical = 8.dp)
+                    .testTag("card_search"),
+        )
+        if (visibleCards.isEmpty())
+            Text(stringResource(R.string.no_search_results), Modifier.padding(24.dp))
         LazyColumn(
             Modifier.fillMaxWidth().heightIn(max = 480.dp),
             contentPadding = PaddingValues(16.dp),
@@ -672,7 +690,13 @@ private fun AllCardsSheet(
                 ) {
                     Row(
                         Modifier.fillMaxWidth()
-                            .clickable(enabled = !editing) { onSelect(card.id) }
+                            .clickable(
+                                enabled =
+                                    !editing &&
+                                        (!state.busy || state.operation == AccessMode.APPLYING)
+                            ) {
+                                onSelect(card.id)
+                            }
                             .testTag("card_list_row_${card.id}")
                             .padding(14.dp),
                         verticalAlignment = Alignment.CenterVertically,
@@ -853,10 +877,16 @@ private fun DetailsSheet(
                 { icon = it },
                 !state.busy,
             )
-            OutlinedTextField(notes, { if (it.length <= 512) notes = it },
+            OutlinedTextField(
+                notes,
+                { if (it.length <= 512) notes = it },
                 label = { Text(stringResource(R.string.card_notes)) },
-                supportingText = { Text("${notes.length}/512") }, enabled = !state.busy,
-                minLines = 2, maxLines = 5, modifier = Modifier.fillMaxWidth())
+                supportingText = { Text("${notes.length}/512") },
+                enabled = !state.busy,
+                minLines = 2,
+                maxLines = 5,
+                modifier = Modifier.fillMaxWidth(),
+            )
             Button(
                 {
                     onUpdate(card.withAppearance(name, color, icon).withNotes(notes))
@@ -905,10 +935,11 @@ private fun DetailsSheet(
             Spacer(Modifier.height(16.dp))
         }
     }
-    if (addTest) ManualTestDialog({ addTest = false }) {
-        onUpdate(card.withTest(it))
-        addTest = false
-    }
+    if (addTest)
+        ManualTestDialog({ addTest = false }) {
+            onUpdate(card.withTest(it))
+            addTest = false
+        }
     if (confirmDelete)
         AlertDialog(
             onDismissRequest = { confirmDelete = false },

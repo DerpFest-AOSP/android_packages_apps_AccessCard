@@ -12,7 +12,7 @@ val AccessFailure.messageRes: Int
             AccessFailure.NFC_OFF -> R.string.mode_nfc_off
             AccessFailure.INVALID_CARD -> R.string.error_card_mode
             AccessFailure.BUSY -> R.string.error_busy
-            AccessFailure.NEEDS_STOP -> R.string.reader_stop_detail
+            AccessFailure.NEEDS_STOP -> R.string.error_busy
             AccessFailure.SERVICE_UNAVAILABLE -> R.string.error_service
             AccessFailure.SNAPSHOT_UNAVAILABLE -> R.string.error_snapshot
             AccessFailure.CONFIG_REJECTED -> R.string.error_rejected

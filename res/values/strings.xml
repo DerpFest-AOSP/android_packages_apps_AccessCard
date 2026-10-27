@@ -27,7 +27,7 @@
     <string name="card_details">Card details</string>
     <string name="technical_details">Identity details</string>
     <string name="identity_note">This is an NFC identity, not a copy of encrypted card contents.</string>
-    <string name="use_card">Use this card</string>
+    <string name="use_card">Enable card</string>
     <string name="stop_card">Stop using card</string>
     <string name="default_card">Default card</string>
     <string name="set_default">Set as default</string>
@@ -45,17 +45,14 @@
     <string name="add_tile">Add to Quick Settings</string>
     <string name="tile_added">AccessCard is in Quick Settings.</string>
     <string name="about">About AccessCard</string>
-    <string name="about_body">A local wallet for NFC access-card identities. No account or network access is required. Identity emulation does not reproduce encrypted sectors or guarantee access-reader acceptance.</string>
-    <string name="experimental">Experimental on this device</string>
-    <string name="verified_lengths">RF-verified UID lengths: %1$s</string>
-    <string name="no_verified_lengths">No UID length has been RF-verified on this device yet.</string>
+    <string name="about_body">A local wallet for NFC access cards. Manage cards and switch from the app or Quick Settings. No account or network access is required.</string>
     <string name="mode_idle">Ready when you are</string>
-    <string name="mode_idle_detail">Choose a card, then tap Use this card.</string>
+    <string name="mode_idle_detail">Swipe to switch cards. You can also enable or stop a card with its controls.</string>
     <string name="mode_active">Using %1$s</string>
     <string name="mode_external">Another NFC identity is in use</string>
-    <string name="mode_active_detail">The identity is applied. Stop this card before using payment cards. Access-reader acceptance is separate.</string>
+    <string name="mode_active_detail">Hold your phone near the access reader. Stop this card before using payment cards.</string>
     <string name="mode_unsupported">Identity emulation is not available</string>
-    <string name="mode_unsupported_detail">You can keep cards here. This device or NFC module is not qualified for emulation.</string>
+    <string name="mode_unsupported_detail">You can store cards here. Identity emulation is not supported by this device or NFC module.</string>
     <string name="mode_nfc_off">NFC is off</string>
     <string name="mode_nfc_off_detail">Turn on NFC to read or use a card.</string>
     <string name="mode_applying">Preparing your card…</string>
@@ -69,10 +66,7 @@
     <string name="reader_title">Bring your card close</string>
     <string name="reader_hint">Hold the card against the NFC area on the back of your phone. Keep it still until it is read.</string>
     <string name="reader_found">Meet your new card.</string>
-    <string name="reader_found_detail">Give it a name and a look. Saving does not activate it.</string>
-    <string name="reader_stop_title">Stop the current card first?</string>
-    <string name="reader_stop_detail">Reading a new card requires leaving emulation mode. The previous card will stay stopped after reading.</string>
-    <string name="stop_and_read">Stop and read</string>
+    <string name="reader_found_detail">Give it a name and a look. Your previous card resumes when you leave this screen.</string>
     <string name="try_again">Try again</string>
     <string name="error_read">The card could not be read. Keep it close and try again.</string>
     <string name="error_tag_type">This card does not provide a supported NFC-A identity.</string>
@@ -114,7 +108,7 @@
     <string name="export_complete">Export completed.</string>
     <string name="export_location_note">Exported files are saved where you choose. Turning off recording clears only the private cache; it does not delete files you exported.</string>
     <string name="usage_rules">Using your cards</string>
-    <string name="usage_rules_detail">Use and stop cards explicitly. Restarting NFC or the phone does not automatically activate a saved card. Stop emulation before paying. Screen-off and locked-device behavior require device testing; no screen-off support is promised.</string>
+    <string name="usage_rules_detail">Swipe between cards to use them. Reading a new card pauses emulation and restores the previous card when you leave. After restarting NFC or the phone, select a card again. Stop emulation before paying.</string>
     <string name="error_tools">The operation could not be completed. Check storage and try again; no success has been reported.</string>
     <string name="card_notes">Notes</string>
     <string name="search_cards">Search names or notes</string>
@@ -123,7 +117,7 @@
     <string name="test_history">Manual test history</string>
     <string name="test_location">Access reader or location</string>
     <string name="test_note">Test notes</string>
-    <string name="manual_test_note">User-reported observations, not device certification. Keeps the latest 20 records per card. These records never change hardware qualification.</string>
+    <string name="manual_test_note">Record your observations from a reader test. Keeps the latest 20 records per card.</string>
     <string name="no_tests">No manual tests recorded.</string>
     <string name="test_accepted">Reader accepted the card</string>
     <string name="test_rejected">Reader rejected the card</string>
@@ -163,4 +157,5 @@
     <string name="capture_partial">Some diagnostic sources are unavailable or recording stopped. Export includes the available logs and collection status.</string>
     <string name="capture_off">Diagnostic recording is off.</string>
     <string name="error_diagnostics">Unable to change diagnostic recording. Make sure the complete ROM is up to date and storage is available.</string>
+    <string name="reader_feedback_detail">A short vibration means a reader field was detected. A long vibration signals an NFC communication or controller error. Reader detection does not confirm that access was granted.</string>
 </resources>
