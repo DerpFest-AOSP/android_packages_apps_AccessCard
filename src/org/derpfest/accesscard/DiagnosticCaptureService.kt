@@ -73,12 +73,17 @@ class DiagnosticCaptureService : Service() {
                                 wakeLock.acquire(120_000)
                                 nextWake = SystemClock.elapsedRealtime() + 30_000
                             }
-                            runCatching { wallet.diagnostics.system.tick() }
-                                .onFailure { wallet.diagnostics.system.unavailable() }
+                            try {
+                                wallet.diagnostics.system.tick()
+                            } catch (e: CancellationException) {
+                                throw e
+                            } catch (_: Exception) {
+                                wallet.diagnostics.system.unavailable()
+                            }
                             delay(1_000)
                         }
                     } finally {
-                        if (wakeLock.isHeld) wakeLock.release()
+                        releaseWakeLock()
                         withContext(NonCancellable) { wallet.diagnostics.system.interrupted() }
                         stopSelf()
                     }
@@ -87,9 +92,15 @@ class DiagnosticCaptureService : Service() {
     }
 
     override fun onDestroy() {
+        // The capture coroutine releases the wake lock in finally. Releasing
+        // it here as well races with that thread and throws if it already ran.
         scope.cancel()
-        if (wakeLock.isHeld) wakeLock.release()
         super.onDestroy()
+    }
+
+    private fun releaseWakeLock() {
+        val lock = wakeLock
+        if (lock.isHeld) lock.release()
     }
 
     companion object {
