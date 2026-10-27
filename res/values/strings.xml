@@ -50,7 +50,7 @@
     <string name="mode_idle_detail">Swipe to switch cards. You can also enable or stop a card with its controls.</string>
     <string name="mode_active">Using %1$s</string>
     <string name="mode_external">Another NFC identity is in use</string>
-    <string name="mode_active_detail">Hold your phone near the access reader while AccessCard is in the foreground. Leaving AccessCard restores your default NFC behavior, including payment cards.</string>
+    <string name="mode_active_detail">Hold your phone near the access reader while AccessCard is in the foreground. Switching apps restores your default NFC behavior.</string>
     <string name="mode_unsupported">Identity emulation is not available</string>
     <string name="mode_unsupported_detail">You can store cards here. Identity emulation is not supported by this device or NFC module.</string>
     <string name="mode_nfc_off">NFC is off</string>
@@ -108,7 +108,7 @@
     <string name="export_complete">Export completed.</string>
     <string name="export_location_note">Exported files are saved where you choose. Turning off recording clears only the private cache; it does not delete files you exported.</string>
     <string name="usage_rules">Using your cards</string>
-    <string name="usage_rules_detail">AccessCard uses the selected card only while in the foreground, including the Quick Settings card panel. Swipe to switch cards. Adding a card pauses emulation; returning restores your previous selection. Switching apps, closing the panel or locking the phone restores your default NFC behavior. Opening AccessCard again resumes your selection unless you stopped it manually.</string>
+    <string name="usage_rules_detail">AccessCard uses the selected card only while in the foreground, including the Quick Settings card panel. Swipe to switch cards. Adding a card pauses emulation; returning restores your previous selection. Switching apps, closing the panel or locking the phone restores your default NFC behavior. Opening AccessCard, including after a reboot, resumes your last successfully used card unless you stopped it manually.</string>
     <string name="error_tools">The operation could not be completed. Check storage and try again; no success has been reported.</string>
     <string name="card_notes">Notes</string>
     <string name="search_cards">Search names or notes</string>

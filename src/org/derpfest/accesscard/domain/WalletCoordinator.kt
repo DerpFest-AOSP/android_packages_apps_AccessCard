@@ -21,6 +21,7 @@ class WalletCoordinator(
     private val store: CardStore,
     val backend: AccessCardBackend,
     val scope: CoroutineScope,
+    private val resumeStore: WalletResumeStore,
     private val diagnostics: (Event, Outcome, AccessFailure?, HardwareState) -> Unit =
         { _, _, _, _ ->
         },
@@ -36,6 +37,9 @@ class WalletCoordinator(
 
     private val foreground = AtomicReference<ForegroundSession?>(null)
     private val manuallyStopped = AtomicBoolean(false)
+    private val explicitIntent = AtomicBoolean(false)
+    private var resumeLoaded = false
+    private var lastUsedCardId: String? = null
 
     private data class Selection(
         val card: AccessCardProfile,
@@ -131,7 +135,29 @@ class WalletCoordinator(
             HardwareState(AccessMode.ERROR, failure = AccessFailure.SERVICE_UNAVAILABLE)
         }
 
+    private fun loadResumeLocked() {
+        if (resumeLoaded) return
+        val saved = resumeStore.load()
+        lastUsedCardId = saved.cardId
+        synchronized(intentLock) {
+            if (!explicitIntent.get()) manuallyStopped.set(saved.manuallyStopped)
+        }
+        mutable.update { it.copy(selectedCardId = it.selectedCardId ?: saved.cardId) }
+        resumeLoaded = true
+    }
+
+    private fun saveResumeLocked() {
+        resumeStore.save(WalletResumeState(lastUsedCardId, manuallyStopped.get()))
+    }
+
     private fun refreshLocked() {
+        val resumeFailed =
+            try {
+                loadResumeLocked()
+                false
+            } catch (_: IOException) {
+                true
+            }
         val wallet =
             try {
                 store.load()
@@ -149,8 +175,8 @@ class WalletCoordinator(
                 wallet = wallet ?: it.wallet,
                 hardware = hardware,
                 loading = false,
-                storageFailed = wallet == null,
-                message = if (wallet == null) AccessFailure.STORAGE else it.message,
+                storageFailed = wallet == null || resumeFailed,
+                message = if (wallet == null || resumeFailed) AccessFailure.STORAGE else it.message,
             )
         }
     }
@@ -236,6 +262,7 @@ class WalletCoordinator(
     fun activate(card: AccessCardProfile): Job =
         synchronized(intentLock) {
             val session = foreground.get() ?: return scope.launch {}
+            explicitIntent.set(true)
             manuallyStopped.set(false)
             activate(card, session)
         }
@@ -258,18 +285,28 @@ class WalletCoordinator(
                                     pendingActivation.get() == null
                             },
                         ) {
+                            loadResumeLocked()
                             val actual = checkedHardware()
-                            if (
-                                actual.mode == AccessMode.ACTIVE &&
-                                    actual.identity == selection.card.identity
-                            )
-                                return@perform
                             if (!backend.canApply(selection.card.identity))
                                 throw AccessException(AccessFailure.INVALID_CARD)
-                            if (!backend.apply(selection.card.identity))
+                            if (
+                                !(actual.mode == AccessMode.ACTIVE &&
+                                    actual.identity == selection.card.identity) &&
+                                    !backend.apply(selection.card.identity)
+                            )
                                 throw AccessException(
                                     inspect().failure ?: AccessFailure.CONFIG_REJECTED
                                 )
+                            val applied = inspect()
+                            if (
+                                applied.mode != AccessMode.ACTIVE ||
+                                    applied.identity != selection.card.identity
+                            )
+                                throw AccessException(
+                                    applied.failure ?: AccessFailure.READBACK_MISMATCH
+                                )
+                            lastUsedCardId = selection.card.id
+                            saveResumeLocked()
                         }
                         .join()
                 }
@@ -285,15 +322,25 @@ class WalletCoordinator(
 
     fun stop(): Job {
         synchronized(intentLock) {
+            explicitIntent.set(true)
             manuallyStopped.set(true)
             cancelSelections()
         }
-        return perform(Event.STOP, AccessMode.STOPPING) {
+        return perform(Event.STOP, AccessMode.STOPPING, waitForTurn = true, allowReading = true) {
+            // Storage failures must not prevent restoring the normal NFC path.
+            val storageError =
+                try {
+                    loadResumeLocked()
+                    saveResumeLocked()
+                    null
+                } catch (e: IOException) {
+                    e
+                }
             val hardware = inspect()
             if (hardware.mode == AccessMode.NFC_OFF) throw AccessException(AccessFailure.NFC_OFF)
-            if (hardware.mode == AccessMode.READING) throw AccessException(AccessFailure.BUSY)
-            if (!backend.stop())
+            if (readerToken == null && !backend.stop())
                 throw AccessException(inspect().failure ?: AccessFailure.RECOVERY_REQUIRED)
+            if (storageError != null) throw storageError
         }
     }
 
@@ -317,6 +364,10 @@ class WalletCoordinator(
                 throw AccessException(inspect().failure ?: AccessFailure.RECOVERY_REQUIRED)
             }
             store.remove(card.id)
+            if (lastUsedCardId == card.id) {
+                lastUsedCardId = null
+                saveResumeLocked()
+            }
         }
     }
 

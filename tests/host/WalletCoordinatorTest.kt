@@ -15,6 +15,22 @@ import org.junit.Test
 class WalletCoordinatorTest {
     private val foregroundOwner = Any()
 
+    private class ResumeStore : WalletResumeStore {
+        var saved = WalletResumeState()
+        var failRead = false
+        var failWrite = false
+
+        override fun load(): WalletResumeState {
+            if (failRead) throw IOException("Test resume read failure")
+            return saved
+        }
+
+        override fun save(state: WalletResumeState) {
+            if (failWrite) throw IOException("Test resume write failure")
+            saved = state
+        }
+    }
+
     private class Storage : CardStore.Storage {
         var bytes: ByteArray? = null
         var failWrite = false
@@ -88,13 +104,171 @@ class WalletCoordinatorTest {
         val store = CardStore(storage)
         val backend = Backend()
         val owner = CoroutineScope(SupervisorJob() + StandardTestDispatcher(testScheduler))
-        val wallet = WalletCoordinator(store, backend, owner)
+        val wallet = WalletCoordinator(store, backend, owner, ResumeStore())
         try {
             wallet.enterForeground(foregroundOwner).join()
             block(storage, store, backend, wallet)
         } finally {
             owner.cancel()
         }
+    }
+
+    @Test
+    fun coldStartRestoresLastSuccessfulCardOnlyAfterEnteringForeground() = runTest {
+        val store = CardStore(Storage())
+        val default = store.add("Default", identity(), 0, 0)
+        val last = store.add("Last used", identity(2), 0, 0)
+        store.setDefault(default.id)
+        val resume = ResumeStore()
+        val previous = WalletCoordinator(store, Backend(), backgroundScope, resume)
+        previous.enterForeground(foregroundOwner).join()
+        previous.activate(last).join()
+        previous.leaveForeground(foregroundOwner).join()
+
+        val backend = Backend()
+        val restarted = WalletCoordinator(store, backend, backgroundScope, resume)
+        restarted.refresh().join()
+        assertEquals(0, backend.applies)
+        assertEquals(AccessMode.IDLE, backend.hardware.mode)
+        assertEquals(last.id, restarted.state.value.selectedCardId)
+        restarted.enterForeground(Any()).join()
+        assertEquals(last.identity, backend.hardware.identity)
+        assertEquals(default.id, store.load().defaultId)
+    }
+
+    @Test
+    fun manualStopSurvivesProcessRestart() = runTest {
+        val store = CardStore(Storage())
+        val card = store.add("Home", identity(), 0, 0)
+        val resume = ResumeStore()
+        val previous = WalletCoordinator(store, Backend(), backgroundScope, resume)
+        previous.enterForeground(foregroundOwner).join()
+        previous.stop().join()
+
+        val backend = Backend()
+        val restarted = WalletCoordinator(store, backend, backgroundScope, resume)
+        restarted.enterForeground(Any()).join()
+        assertEquals(card.id, restarted.state.value.selectedCardId)
+        assertEquals(AccessMode.IDLE, backend.hardware.mode)
+        assertEquals(0, backend.applies)
+        restarted.activate(card).join()
+        assertFalse(resume.saved.manuallyStopped)
+        assertEquals(card.identity, backend.hardware.identity)
+    }
+
+    @Test
+    fun failedActivationKeepsThePreviousSuccessfulCardForRestart() = runTest {
+        val store = CardStore(Storage())
+        val first = store.add("First", identity(), 0, 0)
+        val rejected = store.add("Rejected", identity(2), 0, 0)
+        val resume = ResumeStore()
+        val backend = Backend()
+        val wallet = WalletCoordinator(store, backend, backgroundScope, resume)
+        wallet.enterForeground(foregroundOwner).join()
+        backend.reject = true
+        wallet.activate(rejected).join()
+        assertEquals(first.id, resume.saved.cardId)
+
+        val restartedBackend = Backend()
+        val restarted = WalletCoordinator(store, restartedBackend, backgroundScope, resume)
+        restarted.enterForeground(Any()).join()
+        assertEquals(first.identity, restartedBackend.hardware.identity)
+    }
+
+    @Test
+    fun unreadableResumeStateDoesNotActivateACard() = runTest {
+        val store = CardStore(Storage())
+        store.add("Home", identity(), 0, 0)
+        val resume = ResumeStore().apply { failRead = true }
+        val backend = Backend()
+        val wallet = WalletCoordinator(store, backend, backgroundScope, resume)
+        wallet.enterForeground(foregroundOwner).join()
+        assertEquals(0, backend.applies)
+        assertTrue(wallet.state.value.storageFailed)
+        assertEquals(AccessFailure.STORAGE, wallet.state.value.message)
+    }
+
+    @Test
+    fun failedResumeWriteReportsStorageErrorAndKeepsTheActualHardwareState() = runTest {
+        val store = CardStore(Storage())
+        val card = store.add("Home", identity(), 0, 0)
+        val resume = ResumeStore().apply { failWrite = true }
+        val backend = Backend()
+        val wallet = WalletCoordinator(store, backend, backgroundScope, resume)
+        wallet.enterForeground(foregroundOwner).join()
+        assertEquals(card.identity, wallet.state.value.hardware.identity)
+        assertEquals(AccessMode.ACTIVE, wallet.state.value.hardware.mode)
+        assertEquals(AccessFailure.STORAGE, wallet.state.value.message)
+        assertNull(resume.saved.cardId)
+    }
+
+    @Test
+    fun manualStopRestoresNfcEvenWhenResumeStateCannotBeSaved() = runTest {
+        val store = CardStore(Storage())
+        store.add("Home", identity(), 0, 0)
+        val resume = ResumeStore()
+        val backend = Backend()
+        val wallet = WalletCoordinator(store, backend, backgroundScope, resume)
+        wallet.enterForeground(foregroundOwner).join()
+        resume.failWrite = true
+        wallet.stop().join()
+        assertEquals(AccessMode.IDLE, backend.hardware.mode)
+        assertEquals(AccessFailure.STORAGE, wallet.state.value.message)
+        wallet.leaveForeground(foregroundOwner).join()
+        wallet.enterForeground(foregroundOwner).join()
+        assertEquals(1, backend.applies)
+    }
+
+    @Test
+    fun stoppingDuringAnApplyPersistsTheStopAfterTheApplyCompletes() = runTest {
+        val store = CardStore(Storage())
+        val card = store.add("Home", identity(), 0, 0)
+        val resume = ResumeStore()
+        val backend = Backend()
+        val wallet = WalletCoordinator(store, backend, backgroundScope, resume)
+        wallet.enterForeground(foregroundOwner).join()
+        val next = store.add("Next", identity(2), 0, 0)
+        var stopping: Job? = null
+        backend.onApply = { stopping = wallet.stop() }
+        wallet.activate(next).join()
+        stopping!!.join()
+        assertTrue(resume.saved.manuallyStopped)
+        assertEquals(next.id, resume.saved.cardId)
+        assertEquals(AccessMode.IDLE, backend.hardware.mode)
+        assertNotEquals(card.id, resume.saved.cardId)
+    }
+
+    @Test
+    fun explicitActivationBeforeResumeLoadOverridesTheSavedManualStop() = runTest {
+        val store = CardStore(Storage())
+        val previous = store.add("Previous", identity(), 0, 0)
+        val requested = store.add("Requested", identity(2), 0, 0)
+        val resume = ResumeStore().apply { saved = WalletResumeState(previous.id, true) }
+        val backend = Backend()
+        val wallet = WalletCoordinator(store, backend, backgroundScope, resume)
+        val entering = wallet.enterForeground(foregroundOwner)
+        wallet.activate(requested).join()
+        entering.join()
+        assertEquals(requested.identity, backend.hardware.identity)
+        assertEquals(WalletResumeState(requested.id, false), resume.saved)
+    }
+
+    @Test
+    fun deletedLastUsedCardFallsBackToTheExistingDefault() = runTest {
+        val store = CardStore(Storage())
+        val default = store.add("Default", identity(), 0, 0)
+        val deleted = store.add("Deleted", identity(2), 0, 0)
+        val resume = ResumeStore()
+        val previous = WalletCoordinator(store, Backend(), backgroundScope, resume)
+        previous.enterForeground(foregroundOwner).join()
+        previous.activate(deleted).join()
+        previous.delete(deleted).join()
+        assertNull(resume.saved.cardId)
+
+        val backend = Backend()
+        val restarted = WalletCoordinator(store, backend, backgroundScope, resume)
+        restarted.enterForeground(Any()).join()
+        assertEquals(default.identity, backend.hardware.identity)
     }
 
     @Test
@@ -641,7 +815,7 @@ class WalletCoordinatorTest {
     fun rapidPauseAndResumeCannotCleanUpTheNewLease() = runBlocking {
         val owner = CoroutineScope(SupervisorJob() + Dispatchers.IO)
         val readerScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-        val wallet = WalletCoordinator(CardStore(Storage()), Backend(), owner)
+        val wallet = WalletCoordinator(CardStore(Storage()), Backend(), owner, ResumeStore())
         val session = ReaderSession(wallet, readerScope, defaultName = { "Card $it" })
         try {
             val jobs = mutableListOf<Job>()
@@ -668,7 +842,7 @@ class WalletCoordinatorTest {
         val entered = java.util.concurrent.CountDownLatch(1)
         val released = java.util.concurrent.CountDownLatch(1)
         val closed = java.util.concurrent.atomic.AtomicInteger(0)
-        val wallet = WalletCoordinator(CardStore(Storage()), Backend(), owner)
+        val wallet = WalletCoordinator(CardStore(Storage()), Backend(), owner, ResumeStore())
         val session = ReaderSession(wallet, readerScope, defaultName = { "Card $it" })
         try {
             session.resume().join()
@@ -740,6 +914,7 @@ class WalletCoordinatorTest {
                 CardStore(Storage()),
                 backend,
                 owner,
+                ResumeStore(),
                 diagnostics = { _, _, _, _ -> throw IOException("Full diagnostic cache") },
             )
         try {

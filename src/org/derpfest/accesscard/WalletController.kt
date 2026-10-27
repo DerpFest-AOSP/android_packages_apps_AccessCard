@@ -23,6 +23,7 @@ class WalletController(context: Context, val backend: AccessCardBackend) {
             CardStore.inDirectory(context.filesDir),
             backend,
             scope,
+            preferences,
             diagnostics = { event, outcome, failure, hardware ->
                 diagnostics.record(event, outcome, failure, hardware)
                 updateReminder(event, outcome, hardware)

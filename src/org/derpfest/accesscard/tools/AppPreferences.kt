@@ -5,6 +5,8 @@ import android.content.Context
 import java.io.IOException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import org.derpfest.accesscard.WalletResumeState
+import org.derpfest.accesscard.WalletResumeStore
 
 enum class ThemeChoice {
     SYSTEM,
@@ -18,7 +20,7 @@ data class Preferences(
     val reminders: Boolean = false,
 )
 
-class AppPreferences(context: Context) {
+class AppPreferences(context: Context) : WalletResumeStore {
     private val file = context.getSharedPreferences("preferences", Context.MODE_PRIVATE)
     private val mutable =
         MutableStateFlow(
@@ -30,6 +32,29 @@ class AppPreferences(context: Context) {
             )
         )
     val state = mutable.asStateFlow()
+
+    @Synchronized
+    override fun load(): WalletResumeState =
+        try {
+            WalletResumeState(
+                file.getString("last_used_card", null),
+                file.getBoolean("manually_stopped", false),
+            )
+        } catch (e: ClassCastException) {
+            throw IOException("Resume preferences could not be read", e)
+        }
+
+    @Synchronized
+    override fun save(state: WalletResumeState) {
+        if (
+            !file
+                .edit()
+                .putString("last_used_card", state.cardId)
+                .putBoolean("manually_stopped", state.manuallyStopped)
+                .commit()
+        )
+            throw IOException("Resume preferences could not be saved")
+    }
 
     @Synchronized
     fun update(transform: (Preferences) -> Preferences) {
