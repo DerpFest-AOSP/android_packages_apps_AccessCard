@@ -44,8 +44,9 @@ public final class DiagnosticStore {
     public synchronized void record(Event event, Outcome outcome, int error, int mode,
             boolean recovery, int parameter) throws IOException {
         if (!enabled) return;
-        if (error < -1 || error > 255 || mode < -1 || mode > 255
-                || parameter < -1 || parameter > 65535) throw new IllegalArgumentException();
+        // parameter is the controller's failed_parameter and is not an enum.
+        if (error < -1 || error > 255 || mode < -1 || mode > 255)
+            throw new IllegalArgumentException();
         List<Entry> entries = read();
         entries.add(new Entry(clock.getAsLong(), event, outcome, error, mode, recovery, parameter));
         while (entries.size() > MAX_EVENTS) entries.remove(0);
@@ -79,8 +80,8 @@ public final class DiagnosticStore {
                 boolean recovery = input.readBoolean();
                 int parameter = input.readInt();
                 if (event >= Event.values().length || outcome >= Outcome.values().length
-                        || error < -1 || error > 255 || mode < -1 || mode > 255
-                        || parameter < -1 || parameter > 65535) throw new IOException("Invalid event");
+                        || error < -1 || error > 255 || mode < -1 || mode > 255)
+                    throw new IOException("Invalid event");
                 if (time <= now && now - time <= RETENTION_MS)
                     result.add(new Entry(time, Event.values()[event], Outcome.values()[outcome],
                             error, mode, recovery, parameter));

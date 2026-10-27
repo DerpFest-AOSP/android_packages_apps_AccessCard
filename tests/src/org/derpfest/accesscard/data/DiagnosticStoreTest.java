@@ -70,4 +70,13 @@ public class DiagnosticStoreTest {
         record();
         assertTrue(store.export().matches("[0-9]+ event=APPLY outcome=FAILED error=10 mode=7 recovery=true parameter=49\\n"));
     }
+    @Test public void controllerParameterKeepsItsFullIntegerRange() throws Exception {
+        store.setEnabled(true);
+        store.record(DiagnosticStore.Event.APPLY, DiagnosticStore.Outcome.FAILED, 10, 7, false,
+                Integer.MIN_VALUE);
+        assertTrue(store.export().contains("parameter=" + Integer.MIN_VALUE));
+        DiagnosticStore recreated = new DiagnosticStore(root.resolve("cache").toFile(), now::get);
+        recreated.setEnabled(true);
+        assertTrue(recreated.export().contains("parameter=" + Integer.MIN_VALUE));
+    }
 }
